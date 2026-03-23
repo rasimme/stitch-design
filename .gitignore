@@ -2,6 +2,3 @@ node_modules/
 runs/
 latest-screen.json
 .env
-runs/
-latest-screen.json
-node_modules/

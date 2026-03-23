@@ -1,3 +1,9 @@
+---
+name: stitch-design
+description: AI-powered UI design with Google Stitch. Use when the user wants to generate UI screens, iterate on designs, create variants, or export HTML/screenshots. Handles text-to-UI generation, design editing, variant exploration (refine/explore/reimagine), project management, and visual review workflows. Requires STITCH_API_KEY.
+metadata: {"openclaw": {"requires": {"env": ["STITCH_API_KEY"]}, "primaryEnv": "STITCH_API_KEY"}}
+---
+
 # Stitch Design
 
 AI-powered UI design with Google Stitch — generate, iterate, export.
