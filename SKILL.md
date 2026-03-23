@@ -86,6 +86,41 @@ node scripts/stitch.mjs variants <screen-id> "new color direction" --aspects col
 
 ---
 
+## Workflow: Visual Review (Browse & Pick)
+
+Use when user wants to see existing designs and decide which to work on.
+
+**Step 1 — Get project overview**
+
+```bash
+node scripts/stitch.mjs info <project-id>
+```
+
+This returns all screen IDs + titles.
+
+**Step 2 — Export screenshots for each screen**
+
+```bash
+node scripts/stitch.mjs image <screen-id> --project <project-id>
+```
+
+Do this for each screen (or a selection). Each call saves a `screen.png`.
+
+**Step 3 — Send images to user**
+
+Send the screenshots via Telegram/Discord using the `message` tool with `media` pointing to the PNG files.
+Include screen ID + title as caption so user can reference them.
+
+**Step 4 — User picks a screen**
+
+User says "take screen 3" or "the dark one" → match to screen ID.
+
+**Step 5 — Continue with edit/variants**
+
+Use the picked screen ID for `edit` or `variants` workflows.
+
+---
+
 ## Workflow: Export
 
 Download HTML + screenshot from an existing screen.
@@ -141,9 +176,16 @@ Every operation saves to `runs/<YYYYMMDD-HHmmss>-<operation>-<slug>/`:
 
 1. **Always shape prompts** — Enrich the user's brief with layout/tone keywords before calling generate
 2. **Preview first** — Show `screen.png` to user before offering export
-3. **Default values:** `--device desktop`, `--model pro` (default via SDK), `--count 3`, `--range explore`
-4. **State awareness** — Check `latest-screen.json` before asking user for screen/project IDs
-5. **Figma export** — Manual: open Stitch UI → "Copy to Figma" → paste in Figma. CLI can export HTML which also pastes into Figma
+3. **Visual feedback** — After generate/edit/variants, send the screenshot to the user via their chat channel (Telegram/Discord) so they can see the result immediately
+4. **Default values:** `--device desktop`, `--model pro` (default via SDK), `--count 3`, `--range explore`
+5. **State awareness** — Check `latest-screen.json` before asking user for screen/project IDs
+6. **Figma export** — Manual: open Stitch UI → "Copy to Figma" → paste in Figma. CLI can export HTML which also pastes into Figma
+
+## Limitations
+
+- **No image upload via SDK** — To use a sketch/screenshot as basis, upload it in Stitch Web UI first, then use `edit`/`variants` via the skill on that screen
+- **Models:** `pro` (Gemini 3.1 Pro) and `flash` (Gemini 3.0 Flash). "Redesign with Nanobanana" from the Web UI maps to `variants --range reimagine`
+- **Long operations** — generate/edit/variants take 1-5 minutes. Connection drops are handled automatically via recovery polling
 
 ## Flags Reference
 
