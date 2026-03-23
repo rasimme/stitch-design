@@ -406,9 +406,10 @@ async function cmdHtml(screenId, flags) {
     projectId, screenId, name: `projects/${projectId}/screens/${screenId}`,
   });
 
-  if (!raw.htmlCode) die('No HTML code in screen data');
+  const htmlUrl = resolveUrl(raw.htmlCode);
+  if (!htmlUrl) die('No HTML code in screen data');
   const runDir = await makeRunDir('html', screenId);
-  await writeFile(join(runDir, 'screen.html'), raw.htmlCode);
+  await downloadFile(htmlUrl, join(runDir, 'screen.html'));
 
   ok({ projectId, screenId, runDir, artifacts: ['screen.html'] });
   console.error(`✅ HTML saved: ${runDir}/screen.html`);
@@ -422,9 +423,10 @@ async function cmdImage(screenId, flags) {
     projectId, screenId, name: `projects/${projectId}/screens/${screenId}`,
   });
 
-  if (!raw.screenshot) die('No screenshot in screen data');
+  const imgUrl = resolveUrl(raw.screenshot);
+  if (!imgUrl) die('No screenshot in screen data');
   const runDir = await makeRunDir('image', screenId);
-  await downloadFile(raw.screenshot, join(runDir, 'screen.png'));
+  await downloadFile(imgUrl, join(runDir, 'screen.png'));
 
   ok({ projectId, screenId, runDir, artifacts: ['screen.png'] });
   console.error(`✅ Image saved: ${runDir}/screen.png`);
