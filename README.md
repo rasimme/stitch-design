@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://github.com/rasimme/stitch-design/blob/master/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
-  <a href="https://github.com/rasimme/stitch-design/blob/master/CHANGELOG.md"><img src="https://img.shields.io/badge/version-v1.0.0-blue.svg" alt="Version"></a>
+  <a href="https://github.com/rasimme/stitch-design/blob/master/CHANGELOG.md"><img src="https://img.shields.io/badge/version-v1.0.1-blue.svg" alt="Version"></a>
   <a href="https://clawhub.com"><img src="https://img.shields.io/badge/ClawHub-skill-purple.svg" alt="ClawHub"></a>
 </p>
 
@@ -108,8 +108,8 @@ Or set it as an environment variable: `export STITCH_API_KEY=your-key-here`
 
 | Flag | Values | Default |
 |---|---|---|
-| `--device` | `desktop`, `mobile`, `tablet`, `agnostic` | SDK default |
-| `--model` | `pro` (Gemini 3.1 Pro), `flash` (Gemini 3.0 Flash) | pro |
+| `--device` | `desktop`, `mobile`, `tablet`, `agnostic` | SDK default (desktop) |
+| `--model` | `pro` (Gemini 3.1 Pro), `flash` (Gemini 3.0 Flash) | SDK default (pro) |
 | `--count` | `1`–`5` | `3` |
 | `--range` | `refine`, `explore`, `reimagine` | `explore` |
 | `--aspects` | `layout`, `color_scheme`, `images`, `text_font`, `text_content` | all |
