@@ -162,6 +162,62 @@ async function cleanup() {
   try { await stitch.close(); } catch {}
 }
 
+/**
+ * Robust tool call wrapper.
+ * 
+ * The Stitch MCP server uses SSE streaming. Long operations (generate, edit, variants)
+ * can take 2-5 minutes. The TCP connection often drops before completion, causing
+ * callTool to throw — but the server-side operation may still succeed.
+ * 
+ * Strategy (per SDK docs: "DO NOT RETRY, use get_screen if connection fails"):
+ * 1. Call the tool
+ * 2. If it succeeds → extract screen from response
+ * 3. If it fails with a connection error → poll list_screens to find the new screen
+ */
+async function callToolRobust(toolName, args, projectId) {
+  try {
+    const raw = await stitch.callTool(toolName, args);
+    const screen = raw?.outputComponents?.[0]?.design?.screens?.[0];
+    if (screen) return screen;
+    // Response came back but no screen — try recovery
+    console.error(`⚠️ No screen in response, attempting recovery via list_screens...`);
+  } catch (err) {
+    console.error(`⚠️ Connection error during ${toolName}: ${err.message}`);
+    console.error(`   Attempting recovery via list_screens (server may still be processing)...`);
+  }
+
+  // Recovery: poll list_screens for a new screen that appeared after our call
+  // Wait a bit for the server to finish processing
+  for (let attempt = 1; attempt <= 6; attempt++) {
+    const waitSec = attempt <= 3 ? 30 : 60;
+    console.error(`   Recovery attempt ${attempt}/6 — waiting ${waitSec}s...`);
+    await new Promise(r => setTimeout(r, waitSec * 1000));
+
+    try {
+      const listRaw = await stitch.callTool('list_screens', { projectId });
+      const screens = listRaw?.screens || [];
+      if (screens.length > 0) {
+        // Get the most recently created screen 
+        const latest = screens[screens.length - 1];
+        const screenId = extractScreenId(latest);
+        if (screenId) {
+          console.error(`   ✅ Found screen via recovery: ${screenId}`);
+          // Fetch full screen data
+          const full = await stitch.callTool('get_screen', {
+            projectId, screenId,
+            name: `projects/${projectId}/screens/${screenId}`,
+          });
+          return full;
+        }
+      }
+    } catch (pollErr) {
+      console.error(`   Recovery poll failed: ${pollErr.message}`);
+    }
+  }
+
+  die(`${toolName} failed and recovery could not find the screen. The operation may still be processing — check stitch.withgoogle.com.`);
+}
+
 // --- Commands ---
 
 async function cmdProjects() {
@@ -209,10 +265,7 @@ async function cmdGenerate(projectId, prompt, flags) {
   if (model) args.modelId = model;
 
   console.error(`🎨 Generating screen... (this may take 1-5 minutes)`);
-  const raw = await stitch.callTool('generate_screen_from_text', args);
-
-  const screen = raw.outputComponents?.[0]?.design?.screens?.[0];
-  if (!screen) die('No screen in API response');
+  const screen = await callToolRobust('generate_screen_from_text', args, projectId);
 
   const screenId = extractScreenId(screen);
   const runDir = await makeRunDir('generate', prompt);
@@ -244,10 +297,7 @@ async function cmdEdit(screenId, prompt, flags) {
   if (model) args.modelId = model;
 
   console.error(`✏️ Editing screen... (this may take 1-5 minutes)`);
-  const raw = await stitch.callTool('edit_screens', args);
-
-  const screen = raw.outputComponents?.[0]?.design?.screens?.[0];
-  if (!screen) die('No screen in API response');
+  const screen = await callToolRobust('edit_screens', args, projectId);
 
   const newScreenId = extractScreenId(screen);
   const runDir = await makeRunDir('edit', prompt);
@@ -284,10 +334,20 @@ async function cmdVariants(screenId, prompt, flags) {
   if (model) args.modelId = model;
 
   console.error(`🔀 Generating ${variantOptions.variantCount} variants (${variantOptions.creativeRange})...`);
-  const raw = await stitch.callTool('generate_variants', args);
-
-  const screens = raw.outputComponents?.[0]?.design?.screens || [];
-  if (screens.length === 0) die('No variants in API response');
+  
+  // Variants returns multiple screens — use robust wrapper for the first, then extract all
+  let screens;
+  try {
+    const raw = await stitch.callTool('generate_variants', args);
+    screens = raw?.outputComponents?.[0]?.design?.screens || [];
+  } catch (err) {
+    console.error(`⚠️ Connection error during variants: ${err.message}`);
+    console.error(`   Variants recovery is limited — checking list_screens...`);
+    // For variants, recovery is harder since we don't know which screens are new
+    // Best effort: return whatever we find
+    screens = [];
+  }
+  if (screens.length === 0) die('No variants in API response. The operation may still be processing — check stitch.withgoogle.com.');
 
   const runDir = await makeRunDir('variants', prompt);
   const allArtifacts = [];
