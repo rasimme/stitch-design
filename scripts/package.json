@@ -1,0 +1,9 @@
+{
+  "name": "stitch-design-cli",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "CLI wrapper for Google Stitch SDK",
+  "dependencies": {
+    "@google/stitch-sdk": "^0.0.3"
+  }
+}
