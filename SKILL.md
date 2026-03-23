@@ -180,15 +180,15 @@ Every operation saves to `runs/<YYYYMMDD-HHmmss>-<operation>-<slug>/`:
 
 ## Core Rules
 
-1. **MANDATORY: Read `references/prompt-guide.md` before your first generate/edit/variants call in a session.** It contains critical prompting principles that determine output quality.
+1. **MANDATORY: Read `references/prompt-guide.md` before your first generate/edit/variants call in a session.** It contains critical prompting principles that determine output quality. For SDK details (methods, types, enums), see `references/sdk-api.md`.
 2. **Always shape prompts** — Never pass the user's raw text directly to Stitch. Enrich it using the Prompt Framework (Context → Structure → Aesthetic → Constraints) from the prompt guide. Transform weak prompts into strong ones.
 3. **Component isolation by default** — When the user asks for a component (not a full page), always add: "Design a single standalone UI component — do NOT generate a full application screen. Show it isolated on a neutral background."
 4. **Preview first** — Show `screen.png` to user before offering export
 5. **Visual feedback** — After generate/edit/variants, send the screenshot to the user via their chat channel (Telegram/Discord) so they can see the result immediately
 6. **Iteration > perfection** — Follow the Anchor → Inject → Tune → Fix loop. Define what must NOT change in every edit prompt.
 7. **One prompt = one thing** — Never combine multiple components or screens in one prompt.
-8. **Default values:** `--device desktop`, `--model pro`, `--count 3`, `--range explore`
-9. **State awareness** — Check `latest-screen.json` before asking user for screen/project IDs
+8. **Default values:** `--device` and `--model` use SDK defaults when omitted (typically desktop + Gemini Pro). Explicit: `--count 3`, `--range explore`.
+9. **State awareness** — Before asking the user for screen or project IDs, ALWAYS read `latest-screen.json` first. If it has a recent entry, use that projectId/screenId. Only ask if no state exists or the user explicitly switches context.
 10. **Figma export** — Manual: open Stitch UI → "Copy to Figma" → paste in Figma. CLI can export HTML which also pastes into Figma
 
 ## Sketch-to-Design Workflow
@@ -211,8 +211,8 @@ Stitch interprets hand-drawn sketches and wireframes well. The SDK has no image 
 
 | Flag | Values | Default |
 |---|---|---|
-| `--device` | `desktop`, `mobile`, `tablet`, `agnostic` | SDK default |
-| `--model` | `pro`, `flash` | SDK default |
+| `--device` | `desktop`, `mobile`, `tablet`, `agnostic` | SDK default (desktop) |
+| `--model` | `pro`, `flash` | SDK default (pro) |
 | `--count` | `1`–`5` | `3` |
 | `--range` | `refine`, `explore`, `reimagine` | `explore` |
 | `--aspects` | `layout`, `color_scheme`, `images`, `text_font`, `text_content` | all |

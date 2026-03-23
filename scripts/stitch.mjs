@@ -74,7 +74,8 @@ function timestamp() {
 }
 
 function slugify(text) {
-  return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40).replace(/-$/, '');
+  const slug = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40).replace(/-$/, '');
+  return slug || 'unnamed';
 }
 
 async function makeRunDir(operation, slug) {
@@ -320,8 +321,10 @@ async function cmdVariants(screenId, prompt, flags) {
   if (!screenId || !prompt) die('Usage: variants <screen-id> "prompt" [--project <id>] [--count 3] [--range explore]');
   const projectId = await resolveProjectId(flags);
 
+  const count = parseInt(flags.count || '3', 10);
+  if (isNaN(count) || count < 1 || count > 5) die('--count must be between 1 and 5');
   const variantOptions = {
-    variantCount: parseInt(flags.count || '3', 10),
+    variantCount: count,
     creativeRange: resolveRange(flags.range),
   };
   const aspects = resolveAspects(flags.aspects);

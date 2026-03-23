@@ -1,0 +1,21 @@
+{
+  "name": "stitch-design",
+  "version": "1.0.1",
+  "description": "AI-powered UI design with Google Stitch — generate, iterate, export. OpenClaw AgentSkill.",
+  "keywords": [
+    "openclaw",
+    "skill",
+    "google-stitch",
+    "ui-design",
+    "design",
+    "ai",
+    "figma",
+    "prototyping"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rasimme/stitch-design"
+  },
+  "license": "MIT",
+  "author": "rasimme"
+}

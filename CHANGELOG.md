@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - 2026-03-23
+
+### Fixed
+- Input validation for `--count` flag (NaN guard, range 1-5)
+- `slugify()` fallback to 'unnamed' on empty/special-char-only input
+- Model/device default documentation aligned with SDK behavior
+- State awareness rule made explicit (read `latest-screen.json` before asking)
+
+### Added
+- Root `package.json` for ClawHub publish compatibility
+- `.clawhubignore` (excludes node_modules, runs, .env, latest-screen.json)
+- `engines.node >= 18` in scripts/package.json
+- `references/sdk-api.md` referenced in SKILL.md Core Rules
+
 ## [1.0.0] - 2026-03-23
 
 ### Added
