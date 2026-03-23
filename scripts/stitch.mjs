@@ -49,7 +49,7 @@ function resolveDevice(flag) {
 
 function resolveModel(flag) {
   if (!flag) return undefined;
-  const map = { pro: 'GEMINI_3_PRO', flash: 'GEMINI_3_FLASH' };
+  const map = { pro: 'GEMINI_3_1_PRO', flash: 'GEMINI_3_FLASH' };
   return map[flag.toLowerCase()] || die(`Unknown model: ${flag}`);
 }
 
