@@ -174,17 +174,31 @@ Every operation saves to `runs/<YYYYMMDD-HHmmss>-<operation>-<slug>/`:
 
 ## Core Rules
 
-1. **Always shape prompts** — Enrich the user's brief with layout/tone keywords before calling generate
-2. **Preview first** — Show `screen.png` to user before offering export
-3. **Visual feedback** — After generate/edit/variants, send the screenshot to the user via their chat channel (Telegram/Discord) so they can see the result immediately
-4. **Default values:** `--device desktop`, `--model pro` (default via SDK), `--count 3`, `--range explore`
-5. **State awareness** — Check `latest-screen.json` before asking user for screen/project IDs
-6. **Figma export** — Manual: open Stitch UI → "Copy to Figma" → paste in Figma. CLI can export HTML which also pastes into Figma
+1. **MANDATORY: Read `references/prompt-guide.md` before your first generate/edit/variants call in a session.** It contains critical prompting principles that determine output quality.
+2. **Always shape prompts** — Never pass the user's raw text directly to Stitch. Enrich it using the Prompt Framework (Context → Structure → Aesthetic → Constraints) from the prompt guide. Transform weak prompts into strong ones.
+3. **Component isolation by default** — When the user asks for a component (not a full page), always add: "Design a single standalone UI component — do NOT generate a full application screen. Show it isolated on a neutral background."
+4. **Preview first** — Show `screen.png` to user before offering export
+5. **Visual feedback** — After generate/edit/variants, send the screenshot to the user via their chat channel (Telegram/Discord) so they can see the result immediately
+6. **Iteration > perfection** — Follow the Anchor → Inject → Tune → Fix loop. Define what must NOT change in every edit prompt.
+7. **One prompt = one thing** — Never combine multiple components or screens in one prompt.
+8. **Default values:** `--device desktop`, `--model pro`, `--count 3`, `--range explore`
+9. **State awareness** — Check `latest-screen.json` before asking user for screen/project IDs
+10. **Figma export** — Manual: open Stitch UI → "Copy to Figma" → paste in Figma. CLI can export HTML which also pastes into Figma
+
+## Sketch-to-Design Workflow
+
+Stitch interprets hand-drawn sketches and wireframes well. The SDK has no image upload — but the workflow is:
+1. User uploads sketch in Stitch Web UI (stitch.withgoogle.com)
+2. User tells the agent: "I uploaded a sketch called [title]" (or just "the sketch I just uploaded")
+3. Agent runs `info <project-id>` → finds the screen by title in `list_screens`
+4. Agent uses `edit` or `variants` on that screen to refine it
 
 ## Limitations
 
-- **No image upload via SDK** — To use a sketch/screenshot as basis, upload it in Stitch Web UI first, then use `edit`/`variants` via the skill on that screen
-- **Models:** `pro` (Gemini 3.1 Pro) and `flash` (Gemini 3.0 Flash). "Redesign with Nanobanana" from the Web UI maps to `variants --range reimagine`
+- **No image upload via SDK** — Sketches/screenshots must be uploaded in Stitch Web UI first, then refined via the skill
+- **Models:** `pro` (Gemini 3.1 Pro) and `flash` (Gemini 3.0 Flash). "Redesign/NanoBanana" from the Web UI = `variants --range reimagine`
+- **Full-screen bias** — Stitch defaults to generating complete layouts. Must be explicitly overridden for component work (see Core Rules).
+- **Content hallucination** — Stitch adds unrequested copy, labels, badges. Always have the user review generated content.
 - **Long operations** — generate/edit/variants take 1-5 minutes. Connection drops are handled automatically via recovery polling
 
 ## Flags Reference
