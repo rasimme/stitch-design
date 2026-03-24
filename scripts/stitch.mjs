@@ -6,14 +6,11 @@
  */
 
 import { stitch } from '@google/stitch-sdk';
-import { writeFile, mkdir, readFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const RUNS_DIR = join(__dirname, '..', 'runs');
-const LATEST_FILE = join(__dirname, '..', 'latest-screen.json');
+import { join } from 'node:path';
+import {
+  RUNS_DIR, makeRunDir, downloadFile, saveLatest, loadLatest,
+  saveScreenArtifacts, saveResult, resolveUrl,
+} from './artifacts.mjs';
 
 // --- Helpers ---
 
@@ -40,6 +37,8 @@ function parseArgs(args) {
   }
   return { flags, positional };
 }
+
+// --- Argument Parsing ---
 
 function resolveDevice(flag) {
   if (!flag) return undefined;
@@ -69,38 +68,7 @@ function resolveAspects(flag) {
   });
 }
 
-function timestamp() {
-  return new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
-}
 
-function slugify(text) {
-  const slug = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40).replace(/-$/, '');
-  return slug || 'unnamed';
-}
-
-async function makeRunDir(operation, slug) {
-  const dir = join(RUNS_DIR, `${timestamp()}-${operation}-${slugify(slug)}`);
-  await mkdir(dir, { recursive: true });
-  return dir;
-}
-
-async function downloadFile(url, dest) {
-  const resp = await fetch(url);
-  if (!resp.ok) die(`Download failed: ${resp.status} ${resp.statusText}`);
-  const buf = Buffer.from(await resp.arrayBuffer());
-  await writeFile(dest, buf);
-}
-
-async function saveLatest(projectId, screenId, operation) {
-  const data = { projectId, screenId, operation, timestamp: new Date().toISOString() };
-  await writeFile(LATEST_FILE, JSON.stringify(data, null, 2));
-  return data;
-}
-
-async function loadLatest() {
-  if (!existsSync(LATEST_FILE)) return null;
-  try { return JSON.parse(await readFile(LATEST_FILE, 'utf8')); } catch { return null; }
-}
 
 async function resolveProjectId(flags) {
   if (flags.project) return flags.project;
@@ -117,46 +85,6 @@ function extractScreenId(screen) {
     return parts[parts.length - 1];
   }
   return null;
-}
-
-/** Resolve a field that may be a string URL or {downloadUrl, mimeType, name} object */
-function resolveUrl(field) {
-  if (!field) return null;
-  if (typeof field === 'string') return field;
-  if (typeof field === 'object' && field.downloadUrl) return field.downloadUrl;
-  return null;
-}
-
-/** Save screen artifacts (HTML code + screenshot) to run dir */
-async function saveScreenArtifacts(runDir, screen, index) {
-  const prefix = index !== undefined ? `variant-${index + 1}` : 'screen';
-  const artifacts = [];
-
-  const htmlUrl = resolveUrl(screen.htmlCode);
-  if (htmlUrl) {
-    try {
-      await downloadFile(htmlUrl, join(runDir, `${prefix}.html`));
-      artifacts.push(`${prefix}.html`);
-    } catch (e) {
-      console.error(`Warning: HTML download failed: ${e.message}`);
-      await writeFile(join(runDir, `${prefix}-html-url.txt`), htmlUrl);
-      artifacts.push(`${prefix}-html-url.txt`);
-    }
-  }
-
-  const imgUrl = resolveUrl(screen.screenshot);
-  if (imgUrl) {
-    try {
-      await downloadFile(imgUrl, join(runDir, `${prefix}.png`));
-      artifacts.push(`${prefix}.png`);
-    } catch (e) {
-      console.error(`Warning: Screenshot download failed: ${e.message}`);
-      await writeFile(join(runDir, `${prefix}-screenshot-url.txt`), imgUrl);
-      artifacts.push(`${prefix}-screenshot-url.txt`);
-    }
-  }
-
-  return artifacts;
 }
 
 async function cleanup() {
@@ -272,12 +200,12 @@ async function cmdGenerate(projectId, prompt, flags) {
   const runDir = await makeRunDir('generate', prompt);
   const artifacts = await saveScreenArtifacts(runDir, screen);
 
-  await writeFile(join(runDir, 'result.json'), JSON.stringify({
+  await saveResult(runDir, {
     projectId, screenId, prompt, device: device || 'default', model: model || 'default',
     title: screen.title, width: screen.width, height: screen.height,
     screenshotUrl: resolveUrl(screen.screenshot), htmlUrl: resolveUrl(screen.htmlCode),
     timestamp: new Date().toISOString(),
-  }, null, 2));
+  });
   artifacts.push('result.json');
 
   await saveLatest(projectId, screenId, 'generate');
@@ -304,10 +232,10 @@ async function cmdEdit(screenId, prompt, flags) {
   const runDir = await makeRunDir('edit', prompt);
   const artifacts = await saveScreenArtifacts(runDir, screen);
 
-  await writeFile(join(runDir, 'result.json'), JSON.stringify({
+  await saveResult(runDir, {
     projectId, screenId: newScreenId, originalScreenId: screenId, prompt,
     title: screen.title, timestamp: new Date().toISOString(),
-  }, null, 2));
+  });
   artifacts.push('result.json');
 
   await saveLatest(projectId, newScreenId, 'edit');
@@ -364,11 +292,11 @@ async function cmdVariants(screenId, prompt, flags) {
     variants.push({ index: i + 1, screenId: vid, title: s.title });
   }
 
-  await writeFile(join(runDir, 'result.json'), JSON.stringify({
+  await saveResult(runDir, {
     projectId, originalScreenId: screenId, prompt, variantOptions,
     variants: variants.map(v => ({ ...v })),
     timestamp: new Date().toISOString(),
-  }, null, 2));
+  });
   allArtifacts.push('result.json');
 
   if (variants.length > 0) {
@@ -391,10 +319,10 @@ async function cmdExport(screenId, flags) {
   const runDir = await makeRunDir('export', screenId);
   const artifacts = await saveScreenArtifacts(runDir, raw);
 
-  await writeFile(join(runDir, 'result.json'), JSON.stringify({
+  await saveResult(runDir, {
     projectId, screenId, title: raw.title,
     timestamp: new Date().toISOString(),
-  }, null, 2));
+  });
   artifacts.push('result.json');
 
   ok({ projectId, screenId, runDir, artifacts });

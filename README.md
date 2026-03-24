@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://github.com/rasimme/stitch-design/blob/master/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
-  <a href="https://github.com/rasimme/stitch-design/blob/master/CHANGELOG.md"><img src="https://img.shields.io/badge/version-v1.0.1-blue.svg" alt="Version"></a>
+  <a href="https://github.com/rasimme/stitch-design/blob/master/CHANGELOG.md"><img src="https://img.shields.io/badge/version-v1.0.2-blue.svg" alt="Version"></a>
   <a href="https://clawhub.com"><img src="https://img.shields.io/badge/ClawHub-skill-purple.svg" alt="ClawHub"></a>
 </p>
 
@@ -159,7 +159,8 @@ The agent reads this guide automatically before generating prompts.
 stitch-design/
 ├── SKILL.md              # OpenClaw skill definition (loaded by agent)
 ├── scripts/
-│   ├── stitch.mjs        # CLI wrapper (~450 LOC)
+│   ├── stitch.mjs        # CLI wrapper — API calls & commands
+│   ├── artifacts.mjs     # Local artifact storage & state
 │   └── package.json      # @google/stitch-sdk dependency
 ├── references/
 │   ├── prompt-guide.md   # Comprehensive prompting guide
