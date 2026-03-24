@@ -171,11 +171,12 @@ async function cmdCreate(title) {
 
 async function cmdInfo(projectId) {
   if (!projectId) die('Usage: info <project-id>');
-  const raw = await stitch.callTool('get_project', { name: `projects/${projectId}` });
-  const screens = raw.screens || [];
+  const projectRaw = await stitch.callTool('get_project', { name: `projects/${projectId}` });
+  const screenRaw = await stitch.callTool('list_screens', { projectId });
+  const screens = screenRaw.screens || [];
   ok({
     projectId,
-    title: raw.title || '(untitled)',
+    title: projectRaw.title || '(untitled)',
     screenCount: screens.length,
     screens: screens.map(s => ({
       id: extractScreenId(s),
