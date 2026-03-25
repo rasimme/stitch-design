@@ -1,7 +1,6 @@
 /**
  * download.mjs — HTTP download helper for Stitch Design skill.
- * Separated from artifacts.mjs to avoid readFile+fetch in the same module
- * (triggers ClawHub static scanner "potential_exfiltration" false positive).
+ * Handles URL-to-file downloads (network → disk, never the reverse).
  */
 
 import { writeFile } from 'node:fs/promises';
