@@ -1,5 +1,7 @@
 node_modules/
 runs/
+state/
 latest-screen.json
 .env
 .git/
+tests/
