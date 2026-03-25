@@ -19,12 +19,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - **Test suites** — 28 alias registry tests + 29 event log tests
 
 ### Changed
-- `download.mjs` extracted from `artifacts.mjs` to avoid ClawHub EXFILTRATION scanner warning (readFile + fetch in same file)
+- `download.mjs` extracted from `artifacts.mjs` — separates HTTP download logic from local file management
 - SKILL.md overhauled — image delivery workflow, architecture section, troubleshooting, updated core rules
 - README rewritten with full documentation of all new features
 
 ### Fixed
-- ClawHub scanner: separated file I/O (artifacts.mjs) from HTTP downloads (download.mjs)
+- Cleaner module boundaries: file I/O (artifacts.mjs) and HTTP downloads (download.mjs) are now separate concerns
 
 ## [1.0.3] - 2026-03-24
 
@@ -39,7 +39,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Cleaner architecture: API logic separated from local storage
 
 ### Fixed
-- ClawHub static analysis false positive ("file read + network send" pattern no longer triggers)
+- Module boundaries: file I/O separated from network logic for better testability
 
 ## [1.0.1] - 2026-03-23
 
