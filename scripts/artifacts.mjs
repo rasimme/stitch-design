@@ -7,6 +7,7 @@ import { writeFile, mkdir, readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { downloadFile } from './download.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 export const RUNS_DIR = join(__dirname, '..', 'runs');
@@ -36,13 +37,9 @@ export async function makeRunDir(operation, slug) {
   return dir;
 }
 
-/** Download a URL to a local file */
-export async function downloadFile(url, dest) {
-  const resp = await fetch(url);
-  if (!resp.ok) throw new Error(`Download failed: ${resp.status} ${resp.statusText}`);
-  const buf = Buffer.from(await resp.arrayBuffer());
-  await writeFile(dest, buf);
-}
+// downloadFile re-exported from download.mjs
+// (separated to keep file-read and network-send in different modules)
+export { downloadFile };
 
 /** Save latest screen reference for auto-resolve */
 export async function saveLatest(projectId, screenId, operation) {
