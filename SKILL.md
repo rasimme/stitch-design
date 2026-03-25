@@ -10,13 +10,18 @@ AI-powered UI design with Google Stitch — generate, iterate, export.
 
 ## Setup
 
-**Required:** `STITCH_API_KEY` env var.
-Get one at: https://stitch.withgoogle.com → Profile → API Keys
+**Required:** Node.js 18+ and `STITCH_API_KEY` env var.
+Get a key at: https://stitch.withgoogle.com → Profile → API Keys
 
 ```bash
-# Install dependencies (one-time)
+# Install dependencies (one-time, from skill root)
 cd scripts && npm install
 ```
+
+**Troubleshooting:**
+- `STITCH_API_KEY not set` → ensure the env var is configured in OpenClaw skill settings or shell
+- `ECONNRESET` / timeouts → Stitch API calls take 1-5 min; the CLI retries automatically
+- `Corrupt names.json` → run `node scripts/stitch.mjs rebuild --project <id>` to reconstruct from event log
 
 ## Usage
 
@@ -49,7 +54,7 @@ Typical time: 1–5 minutes. The CLI downloads HTML + PNG automatically.
 
 **Step 3 — Preview**
 
-Show the user the screenshot: `runs/<latest>/screen.png`
+Show the hi-res screenshot: run `show <alias>` → display via `MEDIA:<screenshotUrl>` (see Image Delivery).
 
 **Step 4 — Iterate** (edit or variants)
 
@@ -110,11 +115,11 @@ This returns all screen IDs + titles.
 node scripts/stitch.mjs image <screen-id> --project <project-id>
 ```
 
-Do this for each screen (or a selection). Each call saves a `screen.png`.
+Do this for each screen (or a selection). Each call saves a local thumbnail + `result.json` with the `screenshotUrl`.
 
 **Step 3 — Send images to user**
 
-Send the screenshots via Telegram/Discord using the `message` tool with `media` pointing to the PNG files.
+For each screen: get the `screenshotUrl` from the `image` command's `result.json`, append `=w780`, and display via `MEDIA:<url>`.
 Include screen ID + title as caption so user can reference them.
 
 **Step 4 — User picks a screen**
@@ -188,8 +193,9 @@ node scripts/stitch.mjs name concept-a <screen-id> --note "Karte als Fenster, Bo
 ### Looking up screens
 
 ```bash
-# Show screen details via alias (fetches live data from Stitch API)
+# Show screen details via alias or screen ID (fetches live data from Stitch API)
 node scripts/stitch.mjs show concept-a
+node scripts/stitch.mjs show bcde81e368e24edbabd6213d9dc17b3b
 
 # Resolve alias to screen ID only
 node scripts/stitch.mjs resolve concept-a
@@ -223,7 +229,7 @@ node scripts/stitch.mjs unname old-concept
 - Every operation is recorded in `state/projects/<projectId>/events.jsonl` (append-only, immutable)
 - The Stitch API remains the source of truth for screen data — local state only stores mappings and history
 - If a screen is deleted in Stitch, `show` will report it as broken; `names --verify` checks all at once
-- If `names.json` gets corrupted, run `rebuild` to reconstruct it from the event log
+- If `names.json` gets corrupted, run `rebuild` to reconstruct from the event log (pre-log aliases require a backup or manual re-naming)
 
 ### Event Log & History
 
@@ -254,7 +260,8 @@ When generating or editing screens for the user:
 1. **Always use `--name`** when the user has a clear concept name or purpose for the screen
 2. If the user refers to a screen by name (e.g. "show me Concept A"), use `show <alias>` first
 3. When editing a named screen, use `--name <same-alias> --force` to keep the alias pointing to the latest version
-4. Use `names` at session start to see what screens already exist
+4. **After every generate/edit/variants:** run `show <alias|screenId>`, extract `screenshotUrl`, display via `MEDIA:<url>` (see Image Delivery section)
+5. Use `names` at session start to see what screens already exist
 
 ---
 
@@ -271,13 +278,32 @@ Every operation saves to `runs/<YYYYMMDD-HHmmss>-<operation>-<slug>/`:
 
 ---
 
+## Architecture
+
+The skill uses a 3-layer local state model. The Stitch API is always the source of truth for screen content (HTML, screenshots).
+
+| Layer | Storage | Purpose |
+|---|---|---|
+| **Artifacts** | `runs/<timestamp>/` | Immutable per-operation receipts: thumbnail, HTML, result.json |
+| **Event Log** | `state/projects/<id>/events.jsonl` | Append-only chronological record of all operations |
+| **Alias Pointers** | `state/projects/<id>/names.json` | Current named references — rebuildable from event log |
+
+**Key principles:**
+- `runs/` are artifacts (never mutated, never deleted)
+- `state/` is the mutable layer (names.json is a snapshot, events.jsonl is append-only)
+- `names.json` can be rebuilt from `events.jsonl` via `rebuild` (complete for all alias changes recorded in the log; pre-log aliases are preserved from existing snapshot if available)
+- Local thumbnails (`screen.png`) are low-res; always use `screenshotUrl` + `=w780` for display
+- `state/` and `runs/` are gitignored — they are local working state, not source code
+
+---
+
 ## Core Rules
 
 1. **MANDATORY: Read `references/prompt-guide.md` before your first generate/edit/variants call in a session.** It contains critical prompting principles that determine output quality. For SDK details (methods, types, enums), see `references/sdk-api.md`.
 2. **Always shape prompts** — Never pass the user's raw text directly to Stitch. Enrich it using the Prompt Framework (Context → Structure → Aesthetic → Constraints) from the prompt guide. Transform weak prompts into strong ones.
 3. **Component isolation by default** — When the user asks for a component (not a full page), always add: "Design a single standalone UI component — do NOT generate a full application screen. Show it isolated on a neutral background."
-4. **Preview first** — Show `screen.png` to user before offering export
-5. **Visual feedback (MANDATORY)** — After every generate/edit/variants, copy the PNG to the workspace and display it inline. See "Image Delivery" section below.
+4. **Preview first** — Show the hi-res screenshot to user before offering export
+5. **Visual feedback (MANDATORY)** — After every generate/edit/variants, display the hi-res screenshot inline via `show <alias|screenId>` → `MEDIA:<screenshotUrl>`. See "Image Delivery" section.
 6. **Iteration > perfection** — Follow the Anchor → Inject → Tune → Fix loop. Define what must NOT change in every edit prompt.
 7. **One prompt = one thing** — Never combine multiple components or screens in one prompt.
 8. **Default values:** `--device` and `--model` use SDK defaults when omitted (typically desktop + Gemini Pro). Explicit: `--count 3`, `--range explore`.
@@ -288,24 +314,38 @@ Every operation saves to `runs/<YYYYMMDD-HHmmss>-<operation>-<slug>/`:
 
 ## Image Delivery (MANDATORY after every generate/edit/variants)
 
-Stitch saves PNGs to `runs/<timestamp>-<slug>/screen.png` — a path outside OpenClaw's allowed media directories. To show images in chat, always copy to the workspace first:
+The local `screen.png` in `runs/` is only a low-res thumbnail (~168×512px). Full-resolution images come from the Stitch API via `screenshotUrl`.
+
+### How it works
+
+The `show` command accepts an alias OR a raw screen ID and returns live API data with a hi-res screenshot URL (`=w780` suffix appended):
 
 ```bash
-# After every generate/edit/variants — copy to workspace with a descriptive name
-cp runs/<latest-run>/screen.png ~/.openclaw/workspace/<descriptive-name>.png
+# By alias
+node scripts/stitch.mjs show concept-a
+# By screen ID (no alias needed)
+node scripts/stitch.mjs show bcde81e368e24edbabd6213d9dc17b3b
+# → { "screenshotUrl": "https://lh3.googleusercontent.com/...=w780", ... }
 ```
 
-Then display inline in your reply using a **workspace-relative path**:
+### Agent workflow for image display
+
+After every generate/edit/variants:
+1. **With alias** (preferred): run `show <alias>` → extract `screenshotUrl` from JSON → `MEDIA:<url>`
+2. **Without alias**: run `show <screenId>` (accepts raw screen IDs too) → same flow
+3. **Last resort**: get `screenshotUrl` from `runs/<dir>/result.json`, append `=w780`, display via `MEDIA:<url>`
+
 ```
-MEDIA:./descriptive-name.png
+MEDIA:https://lh3.googleusercontent.com/...=w780
 ```
 
-**Rules:**
-- Use a meaningful filename (e.g. `concept-b-home-v2.png`, `concept-c-startscreen.png`)
-- Always use `MEDIA:./filename.png` — NOT absolute paths (`MEDIA:/home/...` is blocked)
-- For variants, copy each file: `variant-1.png`, `variant-2.png`, `variant-3.png`
-- The workspace path is `~/.openclaw/workspace/` — relative paths resolve from there
-- Clean up old preview PNGs periodically (they are for preview only; source of truth is `runs/`)
+### URL size suffixes
+
+Google's `lh3.googleusercontent.com` URLs support size parameters:
+- `=w780` — full mobile design width (default from `show`)
+- `=w1440` — full desktop design width
+- `=s2000` — max 2000px on longest side
+- No suffix → thumbnail only (~168px wide)
 
 ## Sketch-to-Design Workflow
 
@@ -321,7 +361,7 @@ Stitch interprets hand-drawn sketches and wireframes well. The SDK has no image 
 - **Models:** `pro` (Gemini 3.1 Pro) and `flash` (Gemini 3.0 Flash). "Redesign/NanoBanana" from the Web UI = `variants --range reimagine`
 - **Full-screen bias** — Stitch defaults to generating complete layouts. Must be explicitly overridden for component work (see Core Rules).
 - **Content hallucination** — Stitch adds unrequested copy, labels, badges. Always have the user review generated content.
-- **Long operations** — generate/edit/variants take 1-5 minutes. Connection drops are handled automatically via recovery polling
+- **Long operations** — generate/edit/variants take 1-5 minutes. Connection drops are handled automatically via recovery polling (generate/edit retry via `list_screens` newest; variants use delta-based recovery by comparing screen lists before and after the call)
 
 ## Flags Reference
 

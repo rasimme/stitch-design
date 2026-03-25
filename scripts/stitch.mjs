@@ -298,19 +298,60 @@ async function cmdVariants(screenId, prompt, flags) {
 
   console.error(`🔀 Generating ${variantOptions.variantCount} variants (${variantOptions.creativeRange})...`);
   
-  // Variants returns multiple screens — use robust wrapper for the first, then extract all
+  // Snapshot existing screen IDs before the call for delta-based recovery
+  let knownScreenIds = new Set();
+  try {
+    const listBefore = await stitch.callTool('list_screens', { projectId });
+    for (const s of listBefore?.screens || []) {
+      const id = extractScreenId(s);
+      if (id) knownScreenIds.add(id);
+    }
+  } catch { /* proceed without snapshot — recovery will be weaker */ }
+
   let screens;
   try {
     const raw = await stitch.callTool('generate_variants', args);
     screens = raw?.outputComponents?.[0]?.design?.screens || [];
   } catch (err) {
     console.error(`⚠️ Connection error during variants: ${err.message}`);
-    console.error(`   Variants recovery is limited — checking list_screens...`);
-    // For variants, recovery is harder since we don't know which screens are new
-    // Best effort: return whatever we find
     screens = [];
   }
-  if (screens.length === 0) die('No variants in API response. The operation may still be processing — check stitch.withgoogle.com.');
+
+  // Recovery: if no screens returned, poll for new screens via delta
+  if (screens.length === 0) {
+    console.error(`   Attempting delta recovery via list_screens...`);
+    for (let attempt = 1; attempt <= 6; attempt++) {
+      const waitSec = attempt <= 3 ? 30 : 60;
+      console.error(`   Recovery attempt ${attempt}/6 — waiting ${waitSec}s...`);
+      await new Promise(r => setTimeout(r, waitSec * 1000));
+      try {
+        const listAfter = await stitch.callTool('list_screens', { projectId });
+        const allScreens = listAfter?.screens || [];
+        const newScreens = allScreens.filter(s => {
+          const id = extractScreenId(s);
+          return id && !knownScreenIds.has(id);
+        });
+        if (newScreens.length > 0) {
+          console.error(`   ✅ Found ${newScreens.length} new screen(s) via recovery.`);
+          // Fetch full data for each new screen
+          for (const s of newScreens) {
+            const sid = extractScreenId(s);
+            try {
+              const full = await stitch.callTool('get_screen', {
+                projectId, screenId: sid,
+                name: `projects/${projectId}/screens/${sid}`,
+              });
+              screens.push(full);
+            } catch { /* skip unreachable screens */ }
+          }
+          if (screens.length > 0) break;
+        }
+      } catch (pollErr) {
+        console.error(`   Recovery poll failed: ${pollErr.message}`);
+      }
+    }
+  }
+  if (screens.length === 0) die('No variants in API response and recovery failed. The operation may still be processing — check stitch.withgoogle.com.');
 
   const runDir = await makeRunDir('variants', prompt);
   const allArtifacts = [];
@@ -478,20 +519,27 @@ async function cmdNames(flags) {
   }
 }
 
-async function cmdShow(alias, flags) {
-  if (!alias) die('Usage: show <alias> [--project <id>]');
+async function cmdShow(ref, flags) {
+  if (!ref) die('Usage: show <alias|screenId> [--project <id>]');
   const projectId = await resolveProjectId(flags);
-  const entry = await resolveName(projectId, alias);
-  if (!entry) die(`Alias "${alias}" not found in project ${projectId}.`);
+
+  // Try alias first, then treat as raw screen ID
+  const entry = await resolveName(projectId, ref);
+  const screenId = entry ? entry.screenId : ref;
+  const alias = entry ? ref : null;
 
   let screen;
   try {
     screen = await stitch.callTool('get_screen', {
-      projectId, screenId: entry.screenId,
-      name: `projects/${projectId}/screens/${entry.screenId}`,
+      projectId, screenId,
+      name: `projects/${projectId}/screens/${screenId}`,
     });
   } catch (err) {
-    die(`Alias "${alias}" exists (screen ${entry.screenId}), but the screen was not found in Stitch. It may have been deleted. Use "unname ${alias}" to clean up.`);
+    if (alias) {
+      die(`Alias "${alias}" exists (screen ${screenId}), but the screen was not found in Stitch. It may have been deleted. Use "unname ${alias}" to clean up.`);
+    } else {
+      die(`Screen "${ref}" not found in project ${projectId}.`);
+    }
   }
 
   const imgUrl = resolveUrl(screen.screenshot);
@@ -499,14 +547,15 @@ async function cmdShow(alias, flags) {
 
   ok({
     projectId,
-    alias,
-    screenId: entry.screenId,
+    ...(alias ? { alias } : {}),
+    screenId,
     title: screen.title,
-    updatedAt: entry.updatedAt,
+    ...(entry?.updatedAt ? { updatedAt: entry.updatedAt } : {}),
     screenshotUrl: hiresUrl,
-    ...(entry.note ? { note: entry.note } : {}),
+    ...(entry?.note ? { note: entry.note } : {}),
   });
-  console.error(`✅ ${alias} → ${entry.screenId} (${screen.title || 'untitled'})`);
+  const label = alias ? `${alias} → ${screenId}` : screenId;
+  console.error(`✅ ${label} (${screen.title || 'untitled'})`);
 }
 
 // --- History / Lineage / Rebuild commands ---
@@ -620,7 +669,7 @@ Commands:
   resolve <alias>                   Resolve alias to screen ID
   names                             List all named screens
   names --verify                    List + verify against Stitch API
-  show <alias>                      Show screen details via alias
+  show <alias|screenId>             Show screen details via alias or screen ID
   history <alias>                   Show event history for an alias
   history <alias> --rev N           Show Nth alias revision
   lineage <screen-id|alias>         Walk the edit/variant DAG backwards

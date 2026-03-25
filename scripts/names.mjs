@@ -60,15 +60,19 @@ export async function loadNames(projectId) {
   if (!existsSync(fp)) {
     return { version: SCHEMA_VERSION, project: projectId, names: {} };
   }
+  const content = await readFile(fp, 'utf8');
   try {
-    const raw = JSON.parse(await readFile(fp, 'utf8'));
+    const raw = JSON.parse(content);
     // Schema migration placeholder
     if (!raw.version || raw.version < SCHEMA_VERSION) {
       raw.version = SCHEMA_VERSION;
     }
     return raw;
-  } catch {
-    return { version: SCHEMA_VERSION, project: projectId, names: {} };
+  } catch (err) {
+    throw new Error(
+      `Corrupt names.json for project ${projectId} — run 'rebuild' to reconstruct from event log.\n` +
+      `  Path: ${fp}\n  Parse error: ${err.message}`
+    );
   }
 }
 
