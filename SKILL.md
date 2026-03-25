@@ -165,6 +165,74 @@ node scripts/stitch.mjs info <project-id>
 
 ---
 
+## Screen Names (Alias Registry)
+
+Screens get auto-generated IDs like `bcde81e368e24edbabd6213d9dc17b3b`. Use **screen names** to give them memorable aliases that persist across sessions.
+
+### Naming screens
+
+```bash
+# Name during generation (recommended — naming in the flow)
+node scripts/stitch.mjs generate <project-id> "prompt" --name concept-a
+
+# Name during editing (alias follows the new screen)
+node scripts/stitch.mjs edit <screen-id> "changes" --name concept-a --force
+
+# Name an existing screen manually
+node scripts/stitch.mjs name concept-a <screen-id> --project <id>
+
+# Add a note
+node scripts/stitch.mjs name concept-a <screen-id> --note "Karte als Fenster, Bottom Sheet"
+```
+
+### Looking up screens
+
+```bash
+# Show screen details via alias (fetches live data from Stitch API)
+node scripts/stitch.mjs show concept-a
+
+# Resolve alias to screen ID only
+node scripts/stitch.mjs resolve concept-a
+
+# List all named screens in a project
+node scripts/stitch.mjs names
+
+# List + verify against Stitch API (checks for deleted screens)
+node scripts/stitch.mjs names --verify
+```
+
+### Managing names
+
+```bash
+# Rename
+node scripts/stitch.mjs rename concept-a map-startscreen
+
+# Remove
+node scripts/stitch.mjs unname old-concept
+```
+
+### Naming rules
+- **Slugs only:** lowercase `a-z`, `0-9`, hyphens. Case-insensitive.
+- **Examples:** `concept-a`, `home-v2`, `onboarding-flow`, `dark-variant-3`
+- **Not allowed:** spaces, uppercase, special characters
+- Aliases are **unique per project** — the same alias can exist in different projects
+- Use `--force` to overwrite an existing alias
+
+### How it works
+- Names are stored in `state/projects/<projectId>/names.json` (separate from runs/)
+- The Stitch API remains the source of truth for screen data — names only store the alias→screenId mapping
+- If a screen is deleted in Stitch, `show` will report it as broken; `names --verify` checks all at once
+- Atomic writes (temp file + rename) prevent corruption from parallel access
+
+### Agent workflow (MANDATORY)
+When generating or editing screens for the user:
+1. **Always use `--name`** when the user has a clear concept name or purpose for the screen
+2. If the user refers to a screen by name (e.g. "show me Concept A"), use `show <alias>` first
+3. When editing a named screen, use `--name <same-alias> --force` to keep the alias pointing to the latest version
+4. Use `names` at session start to see what screens already exist
+
+---
+
 ## Artifacts
 
 Every operation saves to `runs/<YYYYMMDD-HHmmss>-<operation>-<slug>/`:
@@ -184,12 +252,35 @@ Every operation saves to `runs/<YYYYMMDD-HHmmss>-<operation>-<slug>/`:
 2. **Always shape prompts** — Never pass the user's raw text directly to Stitch. Enrich it using the Prompt Framework (Context → Structure → Aesthetic → Constraints) from the prompt guide. Transform weak prompts into strong ones.
 3. **Component isolation by default** — When the user asks for a component (not a full page), always add: "Design a single standalone UI component — do NOT generate a full application screen. Show it isolated on a neutral background."
 4. **Preview first** — Show `screen.png` to user before offering export
-5. **Visual feedback** — After generate/edit/variants, send the screenshot to the user via their chat channel (Telegram/Discord) so they can see the result immediately
+5. **Visual feedback (MANDATORY)** — After every generate/edit/variants, copy the PNG to the workspace and display it inline. See "Image Delivery" section below.
 6. **Iteration > perfection** — Follow the Anchor → Inject → Tune → Fix loop. Define what must NOT change in every edit prompt.
 7. **One prompt = one thing** — Never combine multiple components or screens in one prompt.
 8. **Default values:** `--device` and `--model` use SDK defaults when omitted (typically desktop + Gemini Pro). Explicit: `--count 3`, `--range explore`.
 9. **State awareness** — Before asking the user for screen or project IDs, ALWAYS read `latest-screen.json` first. If it has a recent entry, use that projectId/screenId. Only ask if no state exists or the user explicitly switches context.
 10. **Figma export** — Manual: open Stitch UI → "Copy to Figma" → paste in Figma. CLI can export HTML which also pastes into Figma
+
+---
+
+## Image Delivery (MANDATORY after every generate/edit/variants)
+
+Stitch saves PNGs to `runs/<timestamp>-<slug>/screen.png` — a path outside OpenClaw's allowed media directories. To show images in chat, always copy to the workspace first:
+
+```bash
+# After every generate/edit/variants — copy to workspace with a descriptive name
+cp runs/<latest-run>/screen.png ~/.openclaw/workspace/<descriptive-name>.png
+```
+
+Then display inline in your reply using a **workspace-relative path**:
+```
+MEDIA:./descriptive-name.png
+```
+
+**Rules:**
+- Use a meaningful filename (e.g. `concept-b-home-v2.png`, `concept-c-startscreen.png`)
+- Always use `MEDIA:./filename.png` — NOT absolute paths (`MEDIA:/home/...` is blocked)
+- For variants, copy each file: `variant-1.png`, `variant-2.png`, `variant-3.png`
+- The workspace path is `~/.openclaw/workspace/` — relative paths resolve from there
+- Clean up old preview PNGs periodically (they are for preview only; source of truth is `runs/`)
 
 ## Sketch-to-Design Workflow
 

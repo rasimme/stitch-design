@@ -11,6 +11,9 @@ import {
   RUNS_DIR, makeRunDir, downloadFile, saveLatest, loadLatest,
   saveScreenArtifacts, saveResult, resolveUrl,
 } from './artifacts.mjs';
+import {
+  setName, removeName, renameName, resolveName, listNames, normalizeAlias, loadNames,
+} from './names.mjs';
 
 // --- Helpers ---
 
@@ -210,8 +213,9 @@ async function cmdGenerate(projectId, prompt, flags) {
   artifacts.push('result.json');
 
   await saveLatest(projectId, screenId, 'generate');
+  const named = await autoName(projectId, screenId, flags.name, flags.force);
 
-  ok({ projectId, screenId, prompt, runDir, artifacts });
+  ok({ projectId, screenId, prompt, runDir, artifacts, ...(named ? { alias: named } : {}) });
   console.error(`✅ Screen generated: ${screenId}`);
   console.error(`📁 Artifacts: ${runDir}`);
 }
@@ -240,8 +244,9 @@ async function cmdEdit(screenId, prompt, flags) {
   artifacts.push('result.json');
 
   await saveLatest(projectId, newScreenId, 'edit');
+  const named = await autoName(projectId, newScreenId, flags.name, flags.force);
 
-  ok({ projectId, screenId: newScreenId, originalScreenId: screenId, prompt, runDir, artifacts });
+  ok({ projectId, screenId: newScreenId, originalScreenId: screenId, prompt, runDir, artifacts, ...(named ? { alias: named } : {}) });
   console.error(`✅ Screen edited: ${newScreenId}`);
   console.error(`📁 Artifacts: ${runDir}`);
 }
@@ -304,7 +309,10 @@ async function cmdVariants(screenId, prompt, flags) {
     await saveLatest(projectId, variants[0].screenId, 'variants');
   }
 
-  ok({ projectId, originalScreenId: screenId, prompt, variantCount: variants.length, runDir, variants, artifacts: allArtifacts });
+  // For variants, --name applies to the first variant only. Others need manual naming.
+  const named = variants.length > 0 ? await autoName(projectId, variants[0].screenId, flags.name, flags.force) : null;
+
+  ok({ projectId, originalScreenId: screenId, prompt, variantCount: variants.length, runDir, variants, artifacts: allArtifacts, ...(named ? { alias: named } : {}) });
   console.error(`✅ ${variants.length} variants generated`);
   console.error(`📁 Artifacts: ${runDir}`);
 }
@@ -364,6 +372,117 @@ async function cmdImage(screenId, flags) {
   console.error(`✅ Image saved: ${runDir}/screen.png`);
 }
 
+// --- Name Commands ---
+
+async function cmdName(alias, screenId, flags) {
+  if (!alias || !screenId) die('Usage: name <alias> <screen-id> [--project <id>] [--note "..."] [--force]');
+  const projectId = await resolveProjectId(flags);
+  const slug = await setName(projectId, alias, screenId, { note: flags.note, force: !!flags.force });
+  ok({ projectId, alias: slug, screenId });
+  console.error(`✅ Named: ${slug} → ${screenId}`);
+}
+
+async function cmdUnname(alias, flags) {
+  if (!alias) die('Usage: unname <alias> [--project <id>]');
+  const projectId = await resolveProjectId(flags);
+  const slug = await removeName(projectId, alias);
+  ok({ projectId, removed: slug });
+  console.error(`✅ Removed alias: ${slug}`);
+}
+
+async function cmdRename(oldAlias, newAlias, flags) {
+  if (!oldAlias || !newAlias) die('Usage: rename <old-alias> <new-alias> [--project <id>]');
+  const projectId = await resolveProjectId(flags);
+  const result = await renameName(projectId, oldAlias, newAlias);
+  ok({ projectId, ...result });
+  console.error(`✅ Renamed: ${result.from} → ${result.to}`);
+}
+
+async function cmdResolve(alias, flags) {
+  if (!alias) die('Usage: resolve <alias> [--project <id>]');
+  const projectId = await resolveProjectId(flags);
+  const entry = await resolveName(projectId, alias);
+  if (!entry) die(`Alias "${alias}" not found in project ${projectId}.`);
+  ok({ projectId, alias, ...entry });
+}
+
+async function cmdNames(flags) {
+  const projectId = await resolveProjectId(flags);
+  const names = await listNames(projectId);
+  const entries = Object.entries(names);
+
+  if (flags.verify) {
+    // Verify each alias against the Stitch API
+    console.error(`🔍 Verifying ${entries.length} aliases against Stitch API...`);
+    const results = [];
+    for (const [alias, entry] of entries) {
+      try {
+        await stitch.callTool('get_screen', {
+          projectId, screenId: entry.screenId,
+          name: `projects/${projectId}/screens/${entry.screenId}`,
+        });
+        results.push({ alias, screenId: entry.screenId, status: 'ok' });
+      } catch {
+        results.push({ alias, screenId: entry.screenId, status: 'broken' });
+        console.error(`   ⚠️ ${alias} → ${entry.screenId}: BROKEN (screen not found)`);
+      }
+    }
+    ok({ projectId, count: results.length, screens: results });
+  } else {
+    ok({
+      projectId,
+      count: entries.length,
+      screens: entries.map(([alias, e]) => ({
+        alias, screenId: e.screenId, updatedAt: e.updatedAt, ...(e.note ? { note: e.note } : {}),
+      })),
+    });
+  }
+}
+
+async function cmdShow(alias, flags) {
+  if (!alias) die('Usage: show <alias> [--project <id>]');
+  const projectId = await resolveProjectId(flags);
+  const entry = await resolveName(projectId, alias);
+  if (!entry) die(`Alias "${alias}" not found in project ${projectId}.`);
+
+  let screen;
+  try {
+    screen = await stitch.callTool('get_screen', {
+      projectId, screenId: entry.screenId,
+      name: `projects/${projectId}/screens/${entry.screenId}`,
+    });
+  } catch (err) {
+    die(`Alias "${alias}" exists (screen ${entry.screenId}), but the screen was not found in Stitch. It may have been deleted. Use "unname ${alias}" to clean up.`);
+  }
+
+  const imgUrl = resolveUrl(screen.screenshot);
+  const hiresUrl = imgUrl ? imgUrl + '=w780' : null;
+
+  ok({
+    projectId,
+    alias,
+    screenId: entry.screenId,
+    title: screen.title,
+    updatedAt: entry.updatedAt,
+    screenshotUrl: hiresUrl,
+    ...(entry.note ? { note: entry.note } : {}),
+  });
+  console.error(`✅ ${alias} → ${entry.screenId} (${screen.title || 'untitled'})`);
+}
+
+/** Auto-name helper: called after generate/edit/variants if --name is provided */
+async function autoName(projectId, screenId, alias, force) {
+  if (!alias) return null;
+  try {
+    const slug = await setName(projectId, alias, screenId, { force });
+    console.error(`📌 Named: ${slug} → ${screenId}`);
+    return slug;
+  } catch (err) {
+    console.error(`⚠️ Auto-name failed: ${err.message}`);
+    return null;
+  }
+}
+
 // --- Main ---
 
 async function main() {
@@ -382,13 +501,25 @@ Commands:
   image <screen-id>                 Download screenshot
   export <screen-id>                Download HTML + screenshot
 
+  Screen Names (Alias Registry):
+  name <alias> <screen-id>          Name a screen (e.g. name concept-a abc123)
+  unname <alias>                    Remove an alias
+  rename <old> <new>                Rename an alias
+  resolve <alias>                   Resolve alias to screen ID
+  names                             List all named screens
+  names --verify                    List + verify against Stitch API
+  show <alias>                      Show screen details via alias
+
 Flags:
   --device desktop|mobile|tablet    Device type (default: SDK default)
   --model pro|flash                 Model (default: SDK default)
   --project <id>                    Project ID (auto from latest-screen.json)
   --count 1-5                       Number of variants (default: 3)
   --range refine|explore|reimagine  Creative range (default: explore)
-  --aspects layout,color_scheme     Variant aspects to change`);
+  --aspects layout,color_scheme     Variant aspects to change
+  --name <alias>                    Auto-name screen after generate/edit/variants
+  --note "text"                     Add a note when naming
+  --force                           Overwrite existing alias`);
     process.exit(1);
   }
 
@@ -406,6 +537,12 @@ Flags:
       case 'html': return await cmdHtml(positional[0], flags);
       case 'image': return await cmdImage(positional[0], flags);
       case 'export': return await cmdExport(positional[0], flags);
+      case 'name': return await cmdName(positional[0], positional[1], flags);
+      case 'unname': return await cmdUnname(positional[0], flags);
+      case 'rename': return await cmdRename(positional[0], positional[1], flags);
+      case 'resolve': return await cmdResolve(positional[0], flags);
+      case 'names': return await cmdNames(flags);
+      case 'show': return await cmdShow(positional[0], flags);
       default: die(`Unknown command: ${command}`);
     }
   } catch (err) {
