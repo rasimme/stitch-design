@@ -14,6 +14,7 @@ import { existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
+import { appendEvent } from './events.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const STATE_DIR = join(__dirname, '..', 'state', 'projects');
@@ -74,7 +75,7 @@ export async function loadNames(projectId) {
 /**
  * Save the names registry atomically (write to temp file, then rename).
  */
-async function saveNames(projectId, data) {
+export async function saveNames(projectId, data) {
   const fp = namesFilePath(projectId);
   const dir = dirname(fp);
   await mkdir(dir, { recursive: true });
@@ -97,10 +98,11 @@ async function saveNames(projectId, data) {
 export async function setName(projectId, alias, screenId, opts = {}) {
   const slug = normalizeAlias(alias);
   const data = await loadNames(projectId);
+  const previousScreenId = data.names[slug]?.screenId || null;
 
-  if (data.names[slug] && data.names[slug].screenId !== screenId && !opts.force) {
+  if (previousScreenId && previousScreenId !== screenId && !opts.force) {
     throw new Error(
-      `Alias "${slug}" already exists (screen ${data.names[slug].screenId}). Use --force to overwrite.`
+      `Alias "${slug}" already exists (screen ${previousScreenId}). Use --force to overwrite.`
     );
   }
 
@@ -111,13 +113,25 @@ export async function setName(projectId, alias, screenId, opts = {}) {
   };
 
   await saveNames(projectId, data);
+
+  // Emit alias_set event
+  if (!opts._skipEvent) {
+    await appendEvent(projectId, {
+      op: 'alias_set',
+      alias: slug,
+      screenId,
+      ...(previousScreenId && previousScreenId !== screenId ? { previousScreenId } : {}),
+      ...(opts.note ? { note: opts.note } : {}),
+    });
+  }
+
   return slug;
 }
 
 /**
  * Remove an alias.
  */
-export async function removeName(projectId, alias) {
+export async function removeName(projectId, alias, opts = {}) {
   const slug = normalizeAlias(alias);
   const data = await loadNames(projectId);
 
@@ -125,15 +139,26 @@ export async function removeName(projectId, alias) {
     throw new Error(`Alias "${slug}" not found in project ${projectId}.`);
   }
 
+  const screenId = data.names[slug].screenId;
   delete data.names[slug];
   await saveNames(projectId, data);
+
+  // Emit alias_removed event
+  if (!opts._skipEvent) {
+    await appendEvent(projectId, {
+      op: 'alias_removed',
+      alias: slug,
+      screenId,
+    });
+  }
+
   return slug;
 }
 
 /**
  * Rename an alias (old → new).
  */
-export async function renameName(projectId, oldAlias, newAlias) {
+export async function renameName(projectId, oldAlias, newAlias, opts = {}) {
   const oldSlug = normalizeAlias(oldAlias);
   const newSlug = normalizeAlias(newAlias);
   const data = await loadNames(projectId);
@@ -148,6 +173,17 @@ export async function renameName(projectId, oldAlias, newAlias) {
   data.names[newSlug] = { ...data.names[oldSlug], updatedAt: new Date().toISOString() };
   delete data.names[oldSlug];
   await saveNames(projectId, data);
+
+  // Emit alias_renamed event
+  if (!opts._skipEvent) {
+    await appendEvent(projectId, {
+      op: 'alias_renamed',
+      alias: newSlug,
+      previousAlias: oldSlug,
+      screenId: data.names[newSlug].screenId,
+    });
+  }
+
   return { from: oldSlug, to: newSlug };
 }
 

@@ -219,10 +219,35 @@ node scripts/stitch.mjs unname old-concept
 - Use `--force` to overwrite an existing alias
 
 ### How it works
-- Names are stored in `state/projects/<projectId>/names.json` (separate from runs/)
-- The Stitch API remains the source of truth for screen data — names only store the alias→screenId mapping
+- Names are stored in `state/projects/<projectId>/names.json` (rebuildable snapshot)
+- Every operation is recorded in `state/projects/<projectId>/events.jsonl` (append-only, immutable)
+- The Stitch API remains the source of truth for screen data — local state only stores mappings and history
 - If a screen is deleted in Stitch, `show` will report it as broken; `names --verify` checks all at once
-- Atomic writes (temp file + rename) prevent corruption from parallel access
+- If `names.json` gets corrupted, run `rebuild` to reconstruct it from the event log
+
+### Event Log & History
+
+Every generate/edit/variants operation and every alias change is recorded as an append-only event.
+
+```bash
+# Show all events for an alias (creates, edits, rebinds)
+node scripts/stitch.mjs history concept-b
+
+# Show a specific alias revision (Nth time it was bound to a screen)
+node scripts/stitch.mjs history concept-b --rev 2
+
+# Walk the edit/variant lineage DAG backwards from a screen
+node scripts/stitch.mjs lineage concept-b
+node scripts/stitch.mjs lineage abc123def456
+
+# Rebuild names.json from event log (recovery)
+node scripts/stitch.mjs rebuild --project <id>
+```
+
+**Event types:**
+- `generate` / `edit` / `variants` — screen operations (with parentScreenId, promptPreview, runDir)
+- `alias_set` / `alias_renamed` / `alias_removed` — alias pointer changes
+- Variants include a `variantGroupId` to group related screens
 
 ### Agent workflow (MANDATORY)
 When generating or editing screens for the user:

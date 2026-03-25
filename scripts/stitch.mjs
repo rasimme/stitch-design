@@ -12,8 +12,12 @@ import {
   saveScreenArtifacts, saveResult, resolveUrl,
 } from './artifacts.mjs';
 import {
-  setName, removeName, renameName, resolveName, listNames, normalizeAlias, loadNames,
+  setName, removeName, renameName, resolveName, listNames, normalizeAlias, loadNames, saveNames as saveNamesRaw,
 } from './names.mjs';
+import {
+  appendEvent, readEvents, promptPreview, makeVariantGroupId,
+  historyForAlias, aliasRevisions, lineage, rebuildNames,
+} from './events.mjs';
 
 // --- Helpers ---
 
@@ -215,6 +219,17 @@ async function cmdGenerate(projectId, prompt, flags) {
   await saveLatest(projectId, screenId, 'generate');
   const named = await autoName(projectId, screenId, flags.name, flags.force);
 
+  // Emit event
+  const runDirName = runDir.split('/').pop();
+  await appendEvent(projectId, {
+    op: 'generate',
+    screenId,
+    ...(named ? { alias: named } : {}),
+    parentScreenId: null,
+    promptPreview: promptPreview(prompt),
+    runDir: runDirName,
+  });
+
   ok({ projectId, screenId, prompt, runDir, artifacts, ...(named ? { alias: named } : {}) });
   console.error(`✅ Screen generated: ${screenId}`);
   console.error(`📁 Artifacts: ${runDir}`);
@@ -245,6 +260,17 @@ async function cmdEdit(screenId, prompt, flags) {
 
   await saveLatest(projectId, newScreenId, 'edit');
   const named = await autoName(projectId, newScreenId, flags.name, flags.force);
+
+  // Emit event
+  const editRunDirName = runDir.split('/').pop();
+  await appendEvent(projectId, {
+    op: 'edit',
+    screenId: newScreenId,
+    parentScreenId: screenId,
+    ...(named ? { alias: named } : {}),
+    promptPreview: promptPreview(prompt),
+    runDir: editRunDirName,
+  });
 
   ok({ projectId, screenId: newScreenId, originalScreenId: screenId, prompt, runDir, artifacts, ...(named ? { alias: named } : {}) });
   console.error(`✅ Screen edited: ${newScreenId}`);
@@ -311,6 +337,19 @@ async function cmdVariants(screenId, prompt, flags) {
 
   // For variants, --name applies to the first variant only. Others need manual naming.
   const named = variants.length > 0 ? await autoName(projectId, variants[0].screenId, flags.name, flags.force) : null;
+
+  // Emit event
+  const varRunDirName = runDir.split('/').pop();
+  const vgId = makeVariantGroupId();
+  await appendEvent(projectId, {
+    op: 'variants',
+    screenIds: variants.map(v => v.screenId),
+    parentScreenId: screenId,
+    variantGroupId: vgId,
+    ...(named ? { alias: named } : {}),
+    promptPreview: promptPreview(prompt),
+    runDir: varRunDirName,
+  });
 
   ok({ projectId, originalScreenId: screenId, prompt, variantCount: variants.length, runDir, variants, artifacts: allArtifacts, ...(named ? { alias: named } : {}) });
   console.error(`✅ ${variants.length} variants generated`);
@@ -470,6 +509,79 @@ async function cmdShow(alias, flags) {
   console.error(`✅ ${alias} → ${entry.screenId} (${screen.title || 'untitled'})`);
 }
 
+// --- History / Lineage / Rebuild commands ---
+
+async function cmdHistory(alias, flags) {
+  if (!alias) die('Usage: history <alias> [--project <id>]');
+  const projectId = await resolveProjectId(flags);
+
+  // Check if --rev N was passed
+  const rev = flags.rev ? parseInt(flags.rev, 10) : null;
+
+  if (rev !== null) {
+    // Get specific revision (alias_set events)
+    const revisions = await aliasRevisions(projectId, alias);
+    if (revisions.length === 0) die(`No revisions found for alias "${alias}".`);
+    if (rev < 1 || rev > revisions.length) die(`Revision ${rev} out of range (1-${revisions.length}).`);
+    const target = revisions[rev - 1];
+    ok({ projectId, alias, revision: rev, totalRevisions: revisions.length, event: target });
+  } else {
+    // Get full history
+    const events = await historyForAlias(projectId, alias);
+    if (events.length === 0) die(`No events found for alias "${alias}".`);
+    ok({ projectId, alias, totalEvents: events.length, events });
+  }
+}
+
+async function cmdLineage(screenIdOrAlias, flags) {
+  if (!screenIdOrAlias) die('Usage: lineage <screen-id|alias> [--project <id>]');
+  const projectId = await resolveProjectId(flags);
+
+  // Try resolving as alias first
+  let screenId = screenIdOrAlias;
+  try {
+    const entry = await resolveName(projectId, screenIdOrAlias);
+    if (entry) screenId = entry.screenId;
+  } catch {
+    // Not a valid alias slug, treat as raw screenId
+  }
+
+  const chain = await lineage(projectId, screenId);
+  if (chain.length === 0) {
+    ok({ projectId, screenId, lineage: [], note: 'No lineage events found. Screen may predate event logging.' });
+    return;
+  }
+
+  ok({
+    projectId,
+    screenId,
+    depth: chain.length,
+    lineage: chain.map(e => ({
+      op: e.op,
+      screenId: e.screenId || (e.screenIds ? e.screenIds[0] : null),
+      parentScreenId: e.parentScreenId || null,
+      promptPreview: e.promptPreview || null,
+      ts: e.ts,
+      alias: e.alias || null,
+    })),
+  });
+}
+
+async function cmdRebuild(flags) {
+  const projectId = await resolveProjectId(flags);
+  if (!projectId) die('Usage: rebuild --project <id>');
+
+  // Load existing names as base (preserves pre-event-log aliases)
+  const existing = await loadNames(projectId);
+  const rebuilt = await rebuildNames(projectId, existing);
+  const { saveNames: doSave } = await import('./names.mjs');
+  await doSave(projectId, rebuilt);
+
+  const count = Object.keys(rebuilt.names).length;
+  ok({ projectId, rebuiltAliases: count, names: rebuilt.names });
+  console.error(`✅ Rebuilt ${count} aliases from event log.`);
+}
+
 /** Auto-name helper: called after generate/edit/variants if --name is provided */
 async function autoName(projectId, screenId, alias, force) {
   if (!alias) return null;
@@ -509,6 +621,10 @@ Commands:
   names                             List all named screens
   names --verify                    List + verify against Stitch API
   show <alias>                      Show screen details via alias
+  history <alias>                   Show event history for an alias
+  history <alias> --rev N           Show Nth alias revision
+  lineage <screen-id|alias>         Walk the edit/variant DAG backwards
+  rebuild                           Rebuild names.json from event log
 
 Flags:
   --device desktop|mobile|tablet    Device type (default: SDK default)
@@ -543,6 +659,9 @@ Flags:
       case 'resolve': return await cmdResolve(positional[0], flags);
       case 'names': return await cmdNames(flags);
       case 'show': return await cmdShow(positional[0], flags);
+      case 'history': return await cmdHistory(positional[0], flags);
+      case 'lineage': return await cmdLineage(positional[0], flags);
+      case 'rebuild': return await cmdRebuild(flags);
       default: die(`Unknown command: ${command}`);
     }
   } catch (err) {
