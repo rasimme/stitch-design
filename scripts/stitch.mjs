@@ -7,6 +7,7 @@
 
 import { stitch } from '@google/stitch-sdk';
 import { join } from 'node:path';
+import { readFile } from 'node:fs/promises';
 import {
   RUNS_DIR, makeRunDir, downloadFile, saveLatest, loadLatest,
   saveScreenArtifacts, saveResult, resolveUrl,
@@ -210,10 +211,15 @@ async function cmdInfo(projectId) {
 async function cmdGenerate(projectId, prompt, flags) {
   if (!projectId || !prompt) die('Usage: generate <project-id> "prompt" [--device desktop] [--model pro]');
 
+  prompt = await applyDesignSystem(prompt, flags);
   const args = { projectId, prompt };
   const device = resolveDevice(flags.device);
   const model = resolveModel(flags.model);
-  if (device) args.deviceType = device;
+  if (device) {
+    args.deviceType = device;
+  } else {
+    args.deviceType = 'DESKTOP';
+  }
   if (model) args.modelId = model;
 
   // Snapshot existing screen IDs so recovery can filter to genuinely new screens
@@ -264,6 +270,7 @@ async function cmdEdit(screenId, prompt, flags) {
   if (!screenId || !prompt) die('Usage: edit <screen-id> "prompt" [--project <id>]');
   const projectId = await resolveProjectId(flags);
 
+  prompt = await applyDesignSystem(prompt, flags);
   const args = { projectId, prompt, selectedScreenIds: [screenId] };
   const device = resolveDevice(flags.device);
   const model = resolveModel(flags.model);
@@ -316,6 +323,7 @@ async function cmdVariants(screenId, prompt, flags) {
   if (!screenId || !prompt) die('Usage: variants <screen-id> "prompt" [--project <id>] [--count 3] [--range explore]');
   const projectId = await resolveProjectId(flags);
 
+  prompt = await applyDesignSystem(prompt, flags);
   const count = parseInt(flags.count || '3', 10);
   if (isNaN(count) || count < 1 || count > 5) die('--count must be between 1 and 5');
   const variantOptions = {
@@ -710,6 +718,18 @@ async function cmdRebuild(flags) {
   console.error(`✅ Rebuilt ${count} aliases from event log.`);
 }
 
+/** Append design system file content to prompt if --design-system flag is set */
+async function applyDesignSystem(prompt, flags) {
+  if (!flags['design-system']) return prompt;
+  let content;
+  try {
+    content = await readFile(flags['design-system'], 'utf-8');
+  } catch {
+    die(`--design-system: file not found: ${flags['design-system']}`);
+  }
+  return prompt + '\n\n--- Design System ---\n' + content + '\n\nDo NOT create or modify any design system.';
+}
+
 /** Auto-name helper: called after generate/edit/variants if --name is provided */
 async function autoName(projectId, screenId, alias, force) {
   if (!alias) return null;
@@ -755,7 +775,7 @@ Commands:
   rebuild                           Rebuild names.json from event log
 
 Flags:
-  --device desktop|mobile|tablet    Device type (default: SDK default)
+  --device desktop|mobile|tablet    Device type (default: desktop for generate)
   --model pro|flash                 Model (default: SDK default)
   --project <id>                    Project ID (auto from latest-screen.json)
   --count 1-5                       Number of variants (default: 3)
@@ -763,7 +783,8 @@ Flags:
   --aspects layout,color_scheme     Variant aspects to change
   --name <alias>                    Auto-name screen after generate/edit/variants
   --note "text"                     Add a note when naming
-  --force                           Overwrite existing alias`);
+  --force                           Overwrite existing alias
+  --design-system <path>            Append design system .md file to prompt`);
     process.exit(1);
   }
 
