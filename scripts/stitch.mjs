@@ -11,7 +11,7 @@ import {
   RUNS_DIR, makeRunDir, downloadFile, saveLatest, loadLatest,
   saveScreenArtifacts, saveResult, resolveUrl,
 } from './artifacts.mjs';
-import { downloadScreenshotWithRefresh, checkScreenshotUrl } from './download.mjs';
+import { checkScreenshotUrl, HIRES_SUFFIX } from './download.mjs';
 import {
   setName, removeName, renameName, resolveName, listNames, normalizeAlias, loadNames, saveNames as saveNamesRaw,
 } from './names.mjs';
@@ -417,7 +417,7 @@ async function cmdVariants(screenId, prompt, flags) {
       index: i + 1,
       screenId: vid,
       title: s.title,
-      screenshotUrl: rawUrl ? rawUrl + '=w780' : null,
+      screenshotUrl: rawUrl ? rawUrl + HIRES_SUFFIX : null,
     });
   }
 
@@ -485,7 +485,7 @@ async function cmdHtml(screenId, flags) {
   const htmlUrl = resolveUrl(raw.htmlCode);
   if (!htmlUrl) die('No HTML code in screen data');
   const runDir = await makeRunDir('html', screenId);
-  await downloadFile(htmlUrl, join(runDir, 'screen.html'));
+  await downloadFile(htmlUrl, join(runDir, 'screen.html'), { expectImage: false });
 
   ok({ projectId, screenId, runDir, artifacts: ['screen.html'] });
   console.error(`✅ HTML saved: ${runDir}/screen.html`);
@@ -599,7 +599,7 @@ async function cmdShow(ref, flags) {
   }
 
   const imgUrl = resolveUrl(screen.screenshot);
-  const hiresUrl = imgUrl ? imgUrl + '=w780' : null;
+  const hiresUrl = imgUrl ? imgUrl + HIRES_SUFFIX : null;
 
   // Verify the screenshot URL is live (CDN tokens expire). Use a HEAD request
   // to avoid downloading the full PNG just for validation.

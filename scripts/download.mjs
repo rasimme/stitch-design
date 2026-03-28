@@ -5,6 +5,8 @@
 
 import { writeFile } from 'node:fs/promises';
 
+export const HIRES_SUFFIX = '=w780';
+
 const PNG_SIG = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
 
 /** Returns true if the buffer starts with the PNG magic bytes */
@@ -12,22 +14,28 @@ export function isPngBuffer(buf) {
   return Buffer.isBuffer(buf) && buf.length >= 8 && PNG_SIG.every((b, i) => buf[i] === b);
 }
 
-/** Download a URL to a local file. Throws if the server returns HTML or JSON instead of a binary file. */
-export async function downloadFile(url, dest) {
+/** Download a URL to a local file. Throws if the server returns HTML or JSON instead of a binary file.
+ * Pass `{ expectImage: false }` to skip Content-Type and magic-byte checks (e.g. for HTML downloads). */
+export async function downloadFile(url, dest, { expectImage = true } = {}) {
   const resp = await fetch(url);
   if (!resp.ok) throw new Error(`Download failed: ${resp.status} ${resp.statusText}`);
   const ct = resp.headers.get('content-type') || '';
-  if (ct.startsWith('text/html') || ct.startsWith('application/json')) {
-    throw new Error(`CDN returned HTML instead of image (URL may be expired)`);
+  if (expectImage) {
+    if (ct.startsWith('text/html') || ct.startsWith('application/json')) {
+      throw new Error(`CDN returned HTML instead of image (URL may be expired)`);
+    }
+    const buf = Buffer.from(await resp.arrayBuffer());
+    // Magic byte check as second guard (Content-Type header alone is not always reliable)
+    if (buf.length >= 8 && !isPngBuffer(buf)) {
+      const start = buf.slice(0, 5).toString('ascii');
+      if (start.startsWith('<!') || start.startsWith('<html') || start.startsWith('<?xml')) {
+        throw new Error(`CDN returned HTML instead of image (magic bytes check failed)`);
+      }
+    }
+    await writeFile(dest, buf);
+    return;
   }
   const buf = Buffer.from(await resp.arrayBuffer());
-  // Magic byte check as second guard (Content-Type header alone is not always reliable)
-  if (buf.length >= 8 && !isPngBuffer(buf)) {
-    const start = buf.slice(0, 5).toString('ascii');
-    if (start.startsWith('<!') || start.startsWith('<html') || start.startsWith('<?xml')) {
-      throw new Error(`CDN returned HTML instead of image (magic bytes check failed)`);
-    }
-  }
   await writeFile(dest, buf);
 }
 
@@ -53,7 +61,7 @@ export async function checkScreenshotUrl(url, { projectId, screenId, getScreen, 
     const fresh = await getScreen({ projectId, screenId });
     const rawUrl = resolveUrl(fresh?.screenshot);
     if (!rawUrl) return { alive: false, freshUrl: null };
-    const freshUrl = rawUrl + '=w780';
+    const freshUrl = rawUrl + HIRES_SUFFIX;
     if (await isAlive(freshUrl)) return { alive: true, freshUrl };
   } catch {}
 
@@ -97,7 +105,7 @@ export async function downloadScreenshotWithRefresh(url, dest, { projectId, scre
     const fresh = await getScreen({ projectId, screenId });
     const rawUrl = resolveUrl(fresh?.screenshot);
     if (!rawUrl) throw new Error('No screenshot URL in refreshed screen data');
-    const freshUrl = rawUrl + '=w780';
+    const freshUrl = rawUrl + HIRES_SUFFIX;
     const finalUrl = await tryFetch(freshUrl);
     return { ok: true, url: finalUrl };
   } catch {}
