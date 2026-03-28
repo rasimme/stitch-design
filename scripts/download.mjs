@@ -21,7 +21,43 @@ export async function downloadFile(url, dest) {
     throw new Error(`CDN returned HTML instead of image (URL may be expired)`);
   }
   const buf = Buffer.from(await resp.arrayBuffer());
+  // Magic byte check as second guard (Content-Type header alone is not always reliable)
+  if (buf.length >= 8 && !isPngBuffer(buf)) {
+    const start = buf.slice(0, 5).toString('ascii');
+    if (start.startsWith('<!') || start.startsWith('<html') || start.startsWith('<?xml')) {
+      throw new Error(`CDN returned HTML instead of image (magic bytes check failed)`);
+    }
+  }
   await writeFile(dest, buf);
+}
+
+/**
+ * Check if a screenshot URL is live using a HEAD request.
+ * Returns { alive: boolean, freshUrl: string|null }
+ * If the URL returns HTML (expired), tries to get a fresh URL via getScreen.
+ */
+export async function checkScreenshotUrl(url, { projectId, screenId, getScreen, resolveUrl }) {
+  const isAlive = async (u) => {
+    try {
+      const resp = await fetch(u, { method: 'HEAD' });
+      if (!resp.ok) return false;
+      const ct = resp.headers.get('content-type') || '';
+      return !ct.startsWith('text/html') && !ct.startsWith('application/json');
+    } catch { return false; }
+  };
+
+  if (await isAlive(url)) return { alive: true, freshUrl: url };
+
+  // URL expired — fetch fresh
+  try {
+    const fresh = await getScreen({ projectId, screenId });
+    const rawUrl = resolveUrl(fresh?.screenshot);
+    if (!rawUrl) return { alive: false, freshUrl: null };
+    const freshUrl = rawUrl + '=w780';
+    if (await isAlive(freshUrl)) return { alive: true, freshUrl };
+  } catch {}
+
+  return { alive: false, freshUrl: null };
 }
 
 /**

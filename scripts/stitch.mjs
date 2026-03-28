@@ -7,13 +7,11 @@
 
 import { stitch } from '@google/stitch-sdk';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
-import { unlink } from 'node:fs/promises';
 import {
   RUNS_DIR, makeRunDir, downloadFile, saveLatest, loadLatest,
   saveScreenArtifacts, saveResult, resolveUrl,
 } from './artifacts.mjs';
-import { downloadScreenshotWithRefresh } from './download.mjs';
+import { downloadScreenshotWithRefresh, checkScreenshotUrl } from './download.mjs';
 import {
   setName, removeName, renameName, resolveName, listNames, normalizeAlias, loadNames, saveNames as saveNamesRaw,
 } from './names.mjs';
@@ -218,8 +216,18 @@ async function cmdGenerate(projectId, prompt, flags) {
   if (device) args.deviceType = device;
   if (model) args.modelId = model;
 
+  // Snapshot existing screen IDs so recovery can filter to genuinely new screens
+  let knownIds = new Set();
+  try {
+    const listBefore = await stitch.callTool('list_screens', { projectId });
+    for (const s of listBefore?.screens || []) {
+      const id = extractScreenId(s);
+      if (id) knownIds.add(id);
+    }
+  } catch { /* proceed without snapshot — recovery will be weaker */ }
+
   console.error(`🎨 Generating screen... (this may take 1-5 minutes)`);
-  const screen = await callToolRobust({ toolName: 'generate_screen_from_text', args, projectId });
+  const screen = await callToolRobust({ toolName: 'generate_screen_from_text', args, projectId, knownIds });
 
   const screenId = extractScreenId(screen);
   const runDir = await makeRunDir('generate', prompt);
@@ -593,30 +601,25 @@ async function cmdShow(ref, flags) {
   const imgUrl = resolveUrl(screen.screenshot);
   const hiresUrl = imgUrl ? imgUrl + '=w780' : null;
 
-  // Verify the screenshot URL is live (CDN tokens expire). If we get HTML back,
-  // fetch a fresh URL from the API and retry once.
+  // Verify the screenshot URL is live (CDN tokens expire). Use a HEAD request
+  // to avoid downloading the full PNG just for validation.
   let screenshotUrl = hiresUrl;
   let screenshotReady = true;
   if (hiresUrl) {
-    const tmpPath = join(tmpdir(), `stitch-show-${screenId}-${Date.now()}.png`);
-    try {
-      const result = await downloadScreenshotWithRefresh(hiresUrl, tmpPath, {
-        projectId,
-        screenId,
-        getScreen: async ({ projectId: pid, screenId: sid }) => stitch.callTool('get_screen', {
-          projectId: pid, screenId: sid, name: `projects/${pid}/screens/${sid}`,
-        }),
-        resolveUrl,
-      });
-      if (result.ok) {
-        screenshotUrl = result.url;
-      } else {
-        screenshotUrl = null;
-        screenshotReady = false;
-        console.error(`⚠️ Screenshot URL is expired and could not be refreshed. screenshotReady: false`);
-      }
-    } finally {
-      try { await unlink(tmpPath); } catch {}
+    const result = await checkScreenshotUrl(hiresUrl, {
+      projectId,
+      screenId,
+      getScreen: async ({ projectId: pid, screenId: sid }) => stitch.callTool('get_screen', {
+        projectId: pid, screenId: sid, name: `projects/${pid}/screens/${sid}`,
+      }),
+      resolveUrl,
+    });
+    if (result.alive) {
+      screenshotUrl = result.freshUrl;
+    } else {
+      screenshotUrl = null;
+      screenshotReady = false;
+      console.error(`⚠️ Screenshot URL is expired and could not be refreshed. screenshotReady: false`);
     }
   }
 
