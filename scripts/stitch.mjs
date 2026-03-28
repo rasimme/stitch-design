@@ -7,10 +7,13 @@
 
 import { stitch } from '@google/stitch-sdk';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { unlink } from 'node:fs/promises';
 import {
   RUNS_DIR, makeRunDir, downloadFile, saveLatest, loadLatest,
   saveScreenArtifacts, saveResult, resolveUrl,
 } from './artifacts.mjs';
+import { downloadScreenshotWithRefresh } from './download.mjs';
 import {
   setName, removeName, renameName, resolveName, listNames, normalizeAlias, loadNames, saveNames as saveNamesRaw,
 } from './names.mjs';
@@ -110,7 +113,7 @@ async function cleanup() {
  * 2. If it succeeds → extract screen from response
  * 3. If it fails with a connection error → poll list_screens to find the new screen
  */
-async function callToolRobust(toolName, args, projectId) {
+async function callToolRobust({ toolName, args, projectId, knownIds = null }) {
   try {
     const raw = await stitch.callTool(toolName, args);
     const screen = raw?.outputComponents?.[0]?.design?.screens?.[0];
@@ -122,8 +125,8 @@ async function callToolRobust(toolName, args, projectId) {
     console.error(`   Attempting recovery via list_screens (server may still be processing)...`);
   }
 
-  // Recovery: poll list_screens for a new screen that appeared after our call
-  // Wait a bit for the server to finish processing
+  // Recovery: poll list_screens for a new screen that appeared after our call.
+  // If knownIds is provided, filter to only screens that are genuinely new.
   for (let attempt = 1; attempt <= 6; attempt++) {
     const waitSec = attempt <= 3 ? 30 : 60;
     console.error(`   Recovery attempt ${attempt}/6 — waiting ${waitSec}s...`);
@@ -132,13 +135,27 @@ async function callToolRobust(toolName, args, projectId) {
     try {
       const listRaw = await stitch.callTool('list_screens', { projectId });
       const screens = listRaw?.screens || [];
-      if (screens.length > 0) {
-        // Get the most recently created screen 
-        const latest = screens[screens.length - 1];
-        const screenId = extractScreenId(latest);
+
+      // Determine candidates: new screens only (when knownIds snapshot is available)
+      let candidates;
+      if (knownIds) {
+        candidates = screens.filter(s => {
+          const id = extractScreenId(s);
+          return id && !knownIds.has(id);
+        });
+      } else {
+        candidates = screens.length > 0 ? [screens[screens.length - 1]] : [];
+      }
+
+      if (candidates.length > 1) {
+        console.error(`   ⚠️ Found ${candidates.length} new screens in recovery — taking the last one.`);
+      }
+
+      const candidate = candidates[candidates.length - 1];
+      if (candidate) {
+        const screenId = extractScreenId(candidate);
         if (screenId) {
           console.error(`   ✅ Found screen via recovery: ${screenId}`);
-          // Fetch full screen data
           const full = await stitch.callTool('get_screen', {
             projectId, screenId,
             name: `projects/${projectId}/screens/${screenId}`,
@@ -202,7 +219,7 @@ async function cmdGenerate(projectId, prompt, flags) {
   if (model) args.modelId = model;
 
   console.error(`🎨 Generating screen... (this may take 1-5 minutes)`);
-  const screen = await callToolRobust('generate_screen_from_text', args, projectId);
+  const screen = await callToolRobust({ toolName: 'generate_screen_from_text', args, projectId });
 
   const screenId = extractScreenId(screen);
   const runDir = await makeRunDir('generate', prompt);
@@ -245,8 +262,18 @@ async function cmdEdit(screenId, prompt, flags) {
   if (device) args.deviceType = device;
   if (model) args.modelId = model;
 
+  // Snapshot existing screen IDs so recovery can filter to genuinely new screens
+  let knownIds = new Set();
+  try {
+    const listBefore = await stitch.callTool('list_screens', { projectId });
+    for (const s of listBefore?.screens || []) {
+      const id = extractScreenId(s);
+      if (id) knownIds.add(id);
+    }
+  } catch { /* proceed without snapshot — recovery will be weaker */ }
+
   console.error(`✏️ Editing screen... (this may take 1-5 minutes)`);
-  const screen = await callToolRobust('edit_screens', args, projectId);
+  const screen = await callToolRobust({ toolName: 'edit_screens', args, projectId, knownIds });
 
   const newScreenId = extractScreenId(screen);
   const runDir = await makeRunDir('edit', prompt);
@@ -293,7 +320,22 @@ async function cmdVariants(screenId, prompt, flags) {
   const args = { projectId, prompt, selectedScreenIds: [screenId], variantOptions };
   const device = resolveDevice(flags.device);
   const model = resolveModel(flags.model);
-  if (device) args.deviceType = device;
+  if (device) {
+    args.deviceType = device;
+  } else {
+    // Inherit deviceType from the original screen so variants match its form factor
+    try {
+      const screenData = await stitch.callTool('get_screen', {
+        projectId, screenId,
+        name: `projects/${projectId}/screens/${screenId}`,
+      });
+      const inheritedDevice = screenData?.screen?.deviceType || screenData?.deviceType;
+      const validDevices = ['DESKTOP', 'MOBILE', 'TABLET', 'AGNOSTIC'];
+      if (inheritedDevice && validDevices.includes(inheritedDevice)) {
+        args.deviceType = inheritedDevice;
+      }
+    } catch { /* proceed without inherit */ }
+  }
   if (model) args.modelId = model;
 
   console.error(`🔀 Generating ${variantOptions.variantCount} variants (${variantOptions.creativeRange})...`);
@@ -362,7 +404,13 @@ async function cmdVariants(screenId, prompt, flags) {
     const vid = extractScreenId(s);
     const arts = await saveScreenArtifacts(runDir, s, i);
     allArtifacts.push(...arts);
-    variants.push({ index: i + 1, screenId: vid, title: s.title });
+    const rawUrl = resolveUrl(s.screenshot);
+    variants.push({
+      index: i + 1,
+      screenId: vid,
+      title: s.title,
+      screenshotUrl: rawUrl ? rawUrl + '=w780' : null,
+    });
   }
 
   await saveResult(runDir, {
@@ -545,13 +593,41 @@ async function cmdShow(ref, flags) {
   const imgUrl = resolveUrl(screen.screenshot);
   const hiresUrl = imgUrl ? imgUrl + '=w780' : null;
 
+  // Verify the screenshot URL is live (CDN tokens expire). If we get HTML back,
+  // fetch a fresh URL from the API and retry once.
+  let screenshotUrl = hiresUrl;
+  let screenshotReady = true;
+  if (hiresUrl) {
+    const tmpPath = join(tmpdir(), `stitch-show-${screenId}-${Date.now()}.png`);
+    try {
+      const result = await downloadScreenshotWithRefresh(hiresUrl, tmpPath, {
+        projectId,
+        screenId,
+        getScreen: async ({ projectId: pid, screenId: sid }) => stitch.callTool('get_screen', {
+          projectId: pid, screenId: sid, name: `projects/${pid}/screens/${sid}`,
+        }),
+        resolveUrl,
+      });
+      if (result.ok) {
+        screenshotUrl = result.url;
+      } else {
+        screenshotUrl = null;
+        screenshotReady = false;
+        console.error(`⚠️ Screenshot URL is expired and could not be refreshed. screenshotReady: false`);
+      }
+    } finally {
+      try { await unlink(tmpPath); } catch {}
+    }
+  }
+
   ok({
     projectId,
     ...(alias ? { alias } : {}),
     screenId,
     title: screen.title,
     ...(entry?.updatedAt ? { updatedAt: entry.updatedAt } : {}),
-    screenshotUrl: hiresUrl,
+    screenshotUrl,
+    screenshotReady,
     ...(entry?.note ? { note: entry.note } : {}),
   });
   const label = alias ? `${alias} → ${screenId}` : screenId;
