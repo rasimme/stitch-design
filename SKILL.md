@@ -444,6 +444,6 @@ Stitch interprets hand-drawn sketches and wireframes well. The SDK has no image 
 | `--range` | `variants` | `refine`, `explore`, `reimagine` | `explore` |
 | `--aspects` | `variants` | `layout`, `color_scheme`, `images`, `text_font`, `text_content` | all |
 | `--project` | all | project ID | from `latest-screen.json` |
-| `--design-system` | `generate`, `edit`, `variants` | path to `.md` file | — |
+| `--design-system` | `generate`, `edit`, `variants` | design system name/slug | — |
 
-**Note on `--design-system`:** Stitch supports native Design Systems (`create_design_system`), but the SDK does not yet allow linking them to generate/edit calls. `--design-system` is a workaround that appends the file content to your prompt. Once the SDK supports `design_system_id` in generate/edit, this flag will become obsolete.
+**Note on `--design-system`:** Stitch supports native Design Systems (`create_design_system`), but the SDK does not yet allow linking them to generate/edit calls. `--design-system` is a workaround that loads `design-systems/<name>.md` from this skill folder and appends that content to your prompt. It does not accept arbitrary file paths. Once the SDK supports `design_system_id` in generate/edit, this flag will become obsolete.

@@ -209,7 +209,7 @@ async function cmdInfo(projectId) {
 }
 
 async function cmdGenerate(projectId, prompt, flags) {
-  if (!projectId || !prompt) die('Usage: generate <project-id> "prompt" [--device desktop] [--model pro] [--design-system <path>]');
+  if (!projectId || !prompt) die('Usage: generate <project-id> "prompt" [--device desktop] [--model pro] [--design-system <name>]');
 
   prompt = await applyDesignSystem(prompt, flags, die);
   const args = { projectId, prompt };
@@ -267,7 +267,7 @@ async function cmdGenerate(projectId, prompt, flags) {
 }
 
 async function cmdEdit(screenId, prompt, flags) {
-  if (!screenId || !prompt) die('Usage: edit <screen-id> "prompt" [--project <id>] [--design-system <path>]');
+  if (!screenId || !prompt) die('Usage: edit <screen-id> "prompt" [--project <id>] [--design-system <name>]');
   const projectId = await resolveProjectId(flags);
 
   prompt = await applyDesignSystem(prompt, flags, die);
@@ -325,7 +325,7 @@ async function cmdEdit(screenId, prompt, flags) {
 }
 
 async function cmdVariants(screenId, prompt, flags) {
-  if (!screenId || !prompt) die('Usage: variants <screen-id> "prompt" [--project <id>] [--count 3] [--range explore] [--design-system <path>]');
+  if (!screenId || !prompt) die('Usage: variants <screen-id> "prompt" [--project <id>] [--count 3] [--range explore] [--design-system <name>]');
   const projectId = await resolveProjectId(flags);
 
   prompt = await applyDesignSystem(prompt, flags, die);
@@ -785,7 +785,7 @@ Flags:
   --name <alias>                    Auto-name screen after generate/edit/variants
   --note "text"                     Add a note when naming
   --force                           Overwrite existing alias
-  --design-system <path>            Append design system .md file to prompt`);
+  --design-system <name>            Append design-systems/<name>.md to prompt`);
     process.exit(1);
   }
 

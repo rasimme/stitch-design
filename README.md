@@ -32,7 +32,7 @@ Your AI agent generates, iterates, and exports UI designs through Google Stitch 
 >
 > → Agent shapes the prompt → Stitch generates → hi-res screenshot delivered → "make it warmer" → done.
 
-**New in v1.2.0:** Design system injection via `--design-system`, automatic device type inheritance for edit/variants, robust screenshot URL validation with auto-refresh, and delta-based recovery for connection drops.
+**New in v1.2.0:** Design system injection via `--design-system <name>` from a local `design-systems/` registry, automatic device type inheritance for edit/variants, robust screenshot URL validation with auto-refresh, and delta-based recovery for connection drops.
 
 ---
 
@@ -49,7 +49,7 @@ Your AI agent generates, iterates, and exports UI designs through Google Stitch 
 - **Auto-Export** — Every operation saves HTML + PNG locally
 - **Prompt Shaping** — Built-in [prompt guide](references/prompt-guide.md) ensures the agent enriches your brief
 - **Recovery** — Handles Stitch API connection drops (1-5 min operations) automatically with delta-based recovery
-- **Design System Injection** — Append a local design system file to any prompt via `--design-system`
+- **Design System Injection** — Append `design-systems/<name>.md` to any prompt via `--design-system <name>`
 - **Device Inheritance** — Edit and variants automatically inherit the source screen's device type
 
 ---
@@ -149,7 +149,7 @@ Or set it as an environment variable: `export STITCH_API_KEY=your-key-here`
 | Flag | Values | Default |
 |---|---|---|
 | `--device` | `desktop`, `mobile`, `tablet`, `agnostic` | `desktop` for generate; inherited for edit/variants |
-| `--design-system` | path to `.md` file | — (append design tokens to prompt) |
+| `--design-system` | design system name/slug | — (loads `design-systems/<name>.md`) |
 | `--model` | `pro` (Gemini 3.1 Pro), `flash` (Gemini 3.0 Flash) | SDK default (pro) |
 | `--count` | `1`–`5` | `3` |
 | `--range` | `refine`, `explore`, `reimagine` | `explore` |
@@ -293,8 +293,9 @@ stitch-design/
 │   ├── stitch.mjs           # CLI — all commands
 │   ├── artifacts.mjs        # Run directory & artifact management
 │   ├── download.mjs         # HTTP download & screenshot URL validation
-│   ├── design-system.mjs    # Design system file reader (--design-system flag)
+│   ├── design-system.mjs    # Design system registry + safe loader
 │   ├── names.mjs            # Alias registry (per-project)
+├── design-systems/          # Allowlisted local design system markdown files
 │   ├── events.mjs           # Append-only event log
 │   └── package.json         # @google/stitch-sdk dependency
 ├── references/
@@ -333,7 +334,7 @@ stitch-design/
 - **Long operations** — Generation takes 1-5 minutes; connection drops handled automatically
 - **Content hallucination** — Stitch may add unrequested UI elements; always review
 - **Theming drift** — Brand colors can shift between sessions; describe all design tokens inline
-- **No design system API link** — The SDK can create design systems but can't link them to generate/edit calls yet; use `--design-system` with a local file as workaround
+- **No design system API link** — The SDK can create design systems but can't link them to generate/edit calls yet; use `--design-system <name>` with a markdown file stored under `design-systems/` as workaround
 - **Thumbnail resolution** — Local `screen.png` is a thumbnail (~168px); use `show` + URL suffix for hi-res
 
 ---

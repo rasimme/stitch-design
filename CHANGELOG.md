@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 ## [1.2.0] - 2026-03-29
 
 ### Added
-- **Design System Injection** — `--design-system <path>` flag for generate/edit/variants appends a local design system file to the prompt (workaround until SDK supports design_system_id linking)
+- **Design System Injection** — `--design-system <name>` flag for generate/edit/variants appends `design-systems/<name>.md` from a local allowlisted registry (workaround until SDK supports design_system_id linking)
 - **Device Type Inheritance** — Edit and variants automatically inherit deviceType from the source screen via `get_screen` when `--device` is not specified
 - **Desktop Default** — `generate` defaults to DESKTOP when no `--device` flag is given
 - **Screenshot URL Validation** — `show` validates screenshot URLs with a HEAD request and auto-refreshes expired URLs via `get_screen`
@@ -20,7 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 ### Changed
 - `callToolRobust()` refactored from positional parameters to Options-Object with `knownIds` for delta-based recovery
 - `downloadFile()` validates Content-Type and magic bytes (PNG signature check), with `expectImage` parameter for HTML-aware downloads
-- `design-system.mjs` extracted as separate module for local file I/O (separation of concerns)
+- `design-system.mjs` extracted as separate module for allowlisted design system loading from `design-systems/`
 - `HIRES_SUFFIX` exported as constant from `download.mjs` (was hardcoded in 4 places)
 - SKILL.md fully in English (previously had mixed German/English sections)
 
