@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://github.com/rasimme/stitch-design/blob/master/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
-  <a href="https://github.com/rasimme/stitch-design/blob/master/CHANGELOG.md"><img src="https://img.shields.io/badge/version-v1.1.3-blue.svg" alt="Version"></a>
+  <a href="https://github.com/rasimme/stitch-design/blob/master/CHANGELOG.md"><img src="https://img.shields.io/badge/version-v1.2.0-blue.svg" alt="Version"></a>
   <a href="https://clawhub.com"><img src="https://img.shields.io/badge/ClawHub-skill-purple.svg" alt="ClawHub"></a>
 </p>
 
@@ -32,7 +32,7 @@ Your AI agent generates, iterates, and exports UI designs through Google Stitch 
 >
 > → Agent shapes the prompt → Stitch generates → hi-res screenshot delivered → "make it warmer" → done.
 
-**New in v1.1.3:** Screen names let you track designs across sessions. An append-only event log records every operation with full lineage. Hi-res image delivery works out of the box.
+**New in v1.2.0:** Design system injection via `--design-system`, automatic device type inheritance for edit/variants, robust screenshot URL validation with auto-refresh, and delta-based recovery for connection drops.
 
 ---
 
@@ -49,6 +49,8 @@ Your AI agent generates, iterates, and exports UI designs through Google Stitch 
 - **Auto-Export** — Every operation saves HTML + PNG locally
 - **Prompt Shaping** — Built-in [prompt guide](references/prompt-guide.md) ensures the agent enriches your brief
 - **Recovery** — Handles Stitch API connection drops (1-5 min operations) automatically with delta-based recovery
+- **Design System Injection** — Append a local design system file to any prompt via `--design-system`
+- **Device Inheritance** — Edit and variants automatically inherit the source screen's device type
 
 ---
 
@@ -146,7 +148,8 @@ Or set it as an environment variable: `export STITCH_API_KEY=your-key-here`
 
 | Flag | Values | Default |
 |---|---|---|
-| `--device` | `desktop`, `mobile`, `tablet`, `agnostic` | SDK default (desktop) |
+| `--device` | `desktop`, `mobile`, `tablet`, `agnostic` | `desktop` for generate; inherited for edit/variants |
+| `--design-system` | path to `.md` file | — (append design tokens to prompt) |
 | `--model` | `pro` (Gemini 3.1 Pro), `flash` (Gemini 3.0 Flash) | SDK default (pro) |
 | `--count` | `1`–`5` | `3` |
 | `--range` | `refine`, `explore`, `reimagine` | `explore` |
@@ -289,7 +292,8 @@ stitch-design/
 ├── scripts/
 │   ├── stitch.mjs           # CLI — all commands
 │   ├── artifacts.mjs        # Run directory & artifact management
-│   ├── download.mjs         # HTTP download utilities
+│   ├── download.mjs         # HTTP download & screenshot URL validation
+│   ├── design-system.mjs    # Design system file reader (--design-system flag)
 │   ├── names.mjs            # Alias registry (per-project)
 │   ├── events.mjs           # Append-only event log
 │   └── package.json         # @google/stitch-sdk dependency
@@ -329,7 +333,7 @@ stitch-design/
 - **Long operations** — Generation takes 1-5 minutes; connection drops handled automatically
 - **Content hallucination** — Stitch may add unrequested UI elements; always review
 - **Theming drift** — Brand colors can shift between sessions; describe all design tokens inline
-- **No design system API** — Design systems are Web UI only; include colors/typography in every prompt
+- **No design system API link** — The SDK can create design systems but can't link them to generate/edit calls yet; use `--design-system` with a local file as workaround
 - **Thumbnail resolution** — Local `screen.png` is a thumbnail (~168px); use `show` + URL suffix for hi-res
 
 ---
