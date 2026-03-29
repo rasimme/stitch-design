@@ -65,4 +65,3 @@ export async function checkScreenshotUrl(url, { projectId, screenId, getScreen, 
   return { alive: false, freshUrl: null };
 }
 
-

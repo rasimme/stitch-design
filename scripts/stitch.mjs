@@ -7,12 +7,12 @@
 
 import { stitch } from '@google/stitch-sdk';
 import { join } from 'node:path';
-import { readFile } from 'node:fs/promises';
 import {
   RUNS_DIR, makeRunDir, downloadFile, saveLatest, loadLatest,
   saveScreenArtifacts, saveResult, resolveUrl,
 } from './artifacts.mjs';
 import { checkScreenshotUrl, HIRES_SUFFIX } from './download.mjs';
+import { applyDesignSystem } from './design-system.mjs';
 import {
   setName, removeName, renameName, resolveName, listNames, normalizeAlias, loadNames, saveNames as saveNamesRaw,
 } from './names.mjs';
@@ -211,7 +211,7 @@ async function cmdInfo(projectId) {
 async function cmdGenerate(projectId, prompt, flags) {
   if (!projectId || !prompt) die('Usage: generate <project-id> "prompt" [--device desktop] [--model pro] [--design-system <path>]');
 
-  prompt = await applyDesignSystem(prompt, flags);
+  prompt = await applyDesignSystem(prompt, flags, die);
   const args = { projectId, prompt };
   const device = resolveDevice(flags.device);
   const model = resolveModel(flags.model);
@@ -270,7 +270,7 @@ async function cmdEdit(screenId, prompt, flags) {
   if (!screenId || !prompt) die('Usage: edit <screen-id> "prompt" [--project <id>] [--design-system <path>]');
   const projectId = await resolveProjectId(flags);
 
-  prompt = await applyDesignSystem(prompt, flags);
+  prompt = await applyDesignSystem(prompt, flags, die);
   const args = { projectId, prompt, selectedScreenIds: [screenId] };
   const device = resolveDevice(flags.device);
   const model = resolveModel(flags.model);
@@ -328,7 +328,7 @@ async function cmdVariants(screenId, prompt, flags) {
   if (!screenId || !prompt) die('Usage: variants <screen-id> "prompt" [--project <id>] [--count 3] [--range explore] [--design-system <path>]');
   const projectId = await resolveProjectId(flags);
 
-  prompt = await applyDesignSystem(prompt, flags);
+  prompt = await applyDesignSystem(prompt, flags, die);
   const count = parseInt(flags.count || '3', 10);
   if (isNaN(count) || count < 1 || count > 5) die('--count must be between 1 and 5');
   const variantOptions = {
@@ -729,18 +729,7 @@ async function inheritDeviceType(projectId, screenId) {
   return null;
 }
 
-/** Append design system file content to prompt if --design-system flag is set */
-async function applyDesignSystem(prompt, flags) {
-  if (!flags['design-system']) return prompt;
-  if (flags['design-system'] === true) die('--design-system requires a file path');
-  let content;
-  try {
-    content = await readFile(flags['design-system'], 'utf-8');
-  } catch (err) {
-    die(`--design-system: cannot read ${flags['design-system']}: ${err.message}`);
-  }
-  return prompt + '\n\n--- Design System ---\n' + content + '\n\nDo NOT create or modify any design system.';
-}
+
 
 /** Auto-name helper: called after generate/edit/variants if --name is provided */
 async function autoName(projectId, screenId, alias, force) {
