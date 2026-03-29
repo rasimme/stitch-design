@@ -150,7 +150,7 @@ node scripts/stitch.mjs image <screen-id>
 
 ### Rule: Always start with a Hub Screen
 
-Zusammengehörige Screens eines Konzepts brauchen einen gemeinsamen Hub-Screen als visuelle Basis. Generate is generative — Layout, Farben, Spacing, Typografie werden neu erfunden. Edit takes the source screen as the visual basis and changes only what you describe — navigation, typography, and color palette stay consistent.
+Related screens of a concept need a shared hub screen as their visual basis. Generate is generative — layout, colors, spacing, and typography are all invented from scratch. Edit takes the source screen as the visual basis and changes only what you describe — navigation, typography, and color palette stay consistent.
 
 **generate vs edit — the key difference:**
 - `generate` = brand-new screen. Everything is up for grabs.
@@ -167,7 +167,7 @@ Zusammengehörige Screens eines Konzepts brauchen einen gemeinsamen Hub-Screen a
 
 ### Reduce to Core (Concept Phase)
 
-In der Konzeptphase reichen 3-4 konsistente Kern-Screens. Volle Screen-Coverage erst nach der Konzeptfreigabe. Stitch ist stark für schnelle Exploration, nicht für exhaustive Ausarbeitung.
+During the concept phase, 3-4 consistent core screens are enough. Full screen coverage only after the concept is approved. Stitch excels at rapid exploration, not exhaustive elaboration.
 
 ---
 

@@ -209,7 +209,7 @@ async function cmdInfo(projectId) {
 }
 
 async function cmdGenerate(projectId, prompt, flags) {
-  if (!projectId || !prompt) die('Usage: generate <project-id> "prompt" [--device desktop] [--model pro]');
+  if (!projectId || !prompt) die('Usage: generate <project-id> "prompt" [--device desktop] [--model pro] [--design-system <path>]');
 
   prompt = await applyDesignSystem(prompt, flags);
   const args = { projectId, prompt };
@@ -267,14 +267,29 @@ async function cmdGenerate(projectId, prompt, flags) {
 }
 
 async function cmdEdit(screenId, prompt, flags) {
-  if (!screenId || !prompt) die('Usage: edit <screen-id> "prompt" [--project <id>]');
+  if (!screenId || !prompt) die('Usage: edit <screen-id> "prompt" [--project <id>] [--design-system <path>]');
   const projectId = await resolveProjectId(flags);
 
   prompt = await applyDesignSystem(prompt, flags);
   const args = { projectId, prompt, selectedScreenIds: [screenId] };
   const device = resolveDevice(flags.device);
   const model = resolveModel(flags.model);
-  if (device) args.deviceType = device;
+  if (device) {
+    args.deviceType = device;
+  } else {
+    // Inherit deviceType from the source screen so edits match its form factor
+    try {
+      const screenData = await stitch.callTool('get_screen', {
+        projectId, screenId,
+        name: `projects/${projectId}/screens/${screenId}`,
+      });
+      const inheritedDevice = screenData?.screen?.deviceType || screenData?.deviceType;
+      const validDevices = ['DESKTOP', 'MOBILE', 'TABLET', 'AGNOSTIC'];
+      if (inheritedDevice && validDevices.includes(inheritedDevice)) {
+        args.deviceType = inheritedDevice;
+      }
+    } catch { /* proceed without inherit */ }
+  }
   if (model) args.modelId = model;
 
   // Snapshot existing screen IDs so recovery can filter to genuinely new screens
@@ -320,7 +335,7 @@ async function cmdEdit(screenId, prompt, flags) {
 }
 
 async function cmdVariants(screenId, prompt, flags) {
-  if (!screenId || !prompt) die('Usage: variants <screen-id> "prompt" [--project <id>] [--count 3] [--range explore]');
+  if (!screenId || !prompt) die('Usage: variants <screen-id> "prompt" [--project <id>] [--count 3] [--range explore] [--design-system <path>]');
   const projectId = await resolveProjectId(flags);
 
   prompt = await applyDesignSystem(prompt, flags);
@@ -721,11 +736,12 @@ async function cmdRebuild(flags) {
 /** Append design system file content to prompt if --design-system flag is set */
 async function applyDesignSystem(prompt, flags) {
   if (!flags['design-system']) return prompt;
+  if (flags['design-system'] === true) die('--design-system requires a file path');
   let content;
   try {
     content = await readFile(flags['design-system'], 'utf-8');
-  } catch {
-    die(`--design-system: file not found: ${flags['design-system']}`);
+  } catch (err) {
+    die(`--design-system: cannot read ${flags['design-system']}: ${err.message}`);
   }
   return prompt + '\n\n--- Design System ---\n' + content + '\n\nDo NOT create or modify any design system.';
 }
@@ -775,7 +791,7 @@ Commands:
   rebuild                           Rebuild names.json from event log
 
 Flags:
-  --device desktop|mobile|tablet    Device type (default: desktop for generate)
+  --device desktop|mobile|tablet|agnostic  Device type (default: desktop for generate; inherited for edit/variants)
   --model pro|flash                 Model (default: SDK default)
   --project <id>                    Project ID (auto from latest-screen.json)
   --count 1-5                       Number of variants (default: 3)
