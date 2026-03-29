@@ -277,18 +277,8 @@ async function cmdEdit(screenId, prompt, flags) {
   if (device) {
     args.deviceType = device;
   } else {
-    // Inherit deviceType from the source screen so edits match its form factor
-    try {
-      const screenData = await stitch.callTool('get_screen', {
-        projectId, screenId,
-        name: `projects/${projectId}/screens/${screenId}`,
-      });
-      const inheritedDevice = screenData?.screen?.deviceType || screenData?.deviceType;
-      const validDevices = ['DESKTOP', 'MOBILE', 'TABLET', 'AGNOSTIC'];
-      if (inheritedDevice && validDevices.includes(inheritedDevice)) {
-        args.deviceType = inheritedDevice;
-      }
-    } catch { /* proceed without inherit */ }
+    const inherited = await inheritDeviceType(projectId, screenId);
+    if (inherited) args.deviceType = inherited;
   }
   if (model) args.modelId = model;
 
@@ -354,18 +344,8 @@ async function cmdVariants(screenId, prompt, flags) {
   if (device) {
     args.deviceType = device;
   } else {
-    // Inherit deviceType from the original screen so variants match its form factor
-    try {
-      const screenData = await stitch.callTool('get_screen', {
-        projectId, screenId,
-        name: `projects/${projectId}/screens/${screenId}`,
-      });
-      const inheritedDevice = screenData?.screen?.deviceType || screenData?.deviceType;
-      const validDevices = ['DESKTOP', 'MOBILE', 'TABLET', 'AGNOSTIC'];
-      if (inheritedDevice && validDevices.includes(inheritedDevice)) {
-        args.deviceType = inheritedDevice;
-      }
-    } catch { /* proceed without inherit */ }
+    const inherited = await inheritDeviceType(projectId, screenId);
+    if (inherited) args.deviceType = inherited;
   }
   if (model) args.modelId = model;
 
@@ -731,6 +711,22 @@ async function cmdRebuild(flags) {
   const count = Object.keys(rebuilt.names).length;
   ok({ projectId, rebuiltAliases: count, names: rebuilt.names });
   console.error(`✅ Rebuilt ${count} aliases from event log.`);
+}
+
+/** Inherit deviceType from an existing screen via get_screen API call */
+async function inheritDeviceType(projectId, screenId) {
+  try {
+    const screenData = await stitch.callTool('get_screen', {
+      projectId, screenId,
+      name: `projects/${projectId}/screens/${screenId}`,
+    });
+    const device = screenData?.screen?.deviceType || screenData?.deviceType;
+    const validDevices = ['DESKTOP', 'MOBILE', 'TABLET', 'AGNOSTIC'];
+    if (device && validDevices.includes(device)) return device;
+  } catch (err) {
+    console.error(`⚠️ Could not inherit deviceType from ${screenId}: ${err.message || err}`);
+  }
+  return null;
 }
 
 /** Append design system file content to prompt if --design-system flag is set */
