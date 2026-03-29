@@ -1,6 +1,6 @@
 ---
 name: stitch-design
-description: Official Google Stitch SDK for OpenClaw: turn chat into production-style UI exploration. Generate screens from text, apply targeted edits, branch variants, export HTML/images, and track full design lineage with screen aliases and event history. Includes hi-res screenshot delivery, multi-concept workflows, and resilient recovery for long-running Stitch jobs. Requires STITCH_API_KEY.
+description: Official Google Stitch SDK wrapper for OpenClaw. Requires only STITCH_API_KEY. Generate UI screens from text, apply targeted edits, branch variants, export HTML/images, and track design lineage with screen aliases plus append-only event history. Stores local artifacts under the skill folder and talks only to Google Stitch endpoints needed for generation and screenshot delivery.
 metadata: {"openclaw": {"requires": {"anyBins": ["node", "node18", "node20", "node22"], "env": ["STITCH_API_KEY"]}, "primaryEnv": "STITCH_API_KEY", "homepage": "https://github.com/rasimme/stitch-design"}}
 ---
 
@@ -12,11 +12,14 @@ AI-powered UI design with Google Stitch — generate, iterate, export.
 
 **Required:** Node.js 18+ and `STITCH_API_KEY` env var.
 Get a key at: https://stitch.withgoogle.com → Profile → API Keys
+Configure the key in your OpenClaw skill env settings or in the shell used to run the CLI.
 
 ```bash
 # Install dependencies (one-time, from skill root)
 cd scripts && npm install
 ```
+
+Install scope: this installs the Node dependency declared in `scripts/package.json` (`@google/stitch-sdk`) plus its npm transitive dependencies.
 
 **Troubleshooting:**
 - `STITCH_API_KEY not set` → ensure the env var is configured in OpenClaw skill settings or shell
@@ -24,6 +27,14 @@ cd scripts && npm install
 - `Corrupt names.json` → run `node scripts/stitch.mjs rebuild --project <id>` to reconstruct from event log
 
 ## Usage
+
+## Runtime Scope
+
+- Network: Google Stitch API and Google-hosted screenshot URLs returned by Stitch
+- Credentials: `STITCH_API_KEY` only
+- Local writes: `runs/`, `state/`, `latest-screen.json`
+- No extra services, daemons, browser automation, or unrelated credentials required
+
 
 The CLI is at `scripts/stitch.mjs`. All output is JSON on stdout.
 

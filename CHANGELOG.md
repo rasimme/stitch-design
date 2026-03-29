@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.2.2] - 2026-03-29
+
+### Changed
+- Clarified runtime scope in SKILL.md and README: requires only `STITCH_API_KEY`, talks only to Google Stitch endpoints needed for generation and screenshot delivery, and stores local artifacts in `runs/`, `state/`, and `latest-screen.json`.
+- Simplified setup guidance to recommend OpenClaw skill env settings or shell env configuration for `STITCH_API_KEY`.
+- Documented install scope more explicitly for the bundled Node CLI dependency flow.
+
 ## [1.2.1] - 2026-03-29
 
 ### Changed

@@ -32,7 +32,9 @@ Your AI agent generates, iterates, and exports UI designs through Google Stitch 
 >
 > → Agent shapes the prompt → Stitch generates → hi-res screenshot delivered → "make it warmer" → done.
 
-**New in v1.2.1:** safer design-system registry loading, plus the v1.2.0 workflow upgrades: device inheritance, robust screenshot URL refresh, and delta-based recovery for connection drops.
+**New in v1.2.2:** safer design-system registry loading, plus the v1.2.0 workflow upgrades: device inheritance, robust screenshot URL refresh, and delta-based recovery for connection drops.
+
+**Runtime scope:** requires only `STITCH_API_KEY`, talks only to Google Stitch endpoints needed for generation/screenshot delivery, and stores local artifacts in `runs/`, `state/`, and `latest-screen.json`.
 
 ---
 
@@ -80,22 +82,11 @@ cd stitch-design/scripts && npm install
 
 ### Configure
 
-Add your API key to OpenClaw config (`~/.openclaw/openclaw.json`):
+Set the API key in your OpenClaw skill env settings or export it in the shell used to run the CLI:
 
-```json5
-{
-  skills: {
-    entries: {
-      "stitch-design": {
-        enabled: true,
-        env: { STITCH_API_KEY: "your-key-here" }
-      }
-    }
-  }
-}
+```bash
+export STITCH_API_KEY="your-key-here"
 ```
-
-Or set it as an environment variable: `export STITCH_API_KEY=your-key-here`
 
 ---
 
