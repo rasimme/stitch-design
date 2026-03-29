@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://github.com/rasimme/stitch-design/blob/master/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
-  <a href="https://github.com/rasimme/stitch-design/blob/master/CHANGELOG.md"><img src="https://img.shields.io/badge/version-v1.2.2-blue.svg" alt="Version"></a>
+  <a href="https://github.com/rasimme/stitch-design/blob/master/CHANGELOG.md"><img src="https://img.shields.io/badge/version-v1.2.3-blue.svg" alt="Version"></a>
   <a href="https://clawhub.com"><img src="https://img.shields.io/badge/ClawHub-skill-purple.svg" alt="ClawHub"></a>
 </p>
 
@@ -32,7 +32,7 @@ Your AI agent generates, iterates, and exports UI designs through Google Stitch 
 >
 > → Agent shapes the prompt → Stitch generates → hi-res screenshot delivered → "make it warmer" → done.
 
-**New in v1.2.2:** safer design-system registry loading, plus the v1.2.0 workflow upgrades: device inheritance, robust screenshot URL refresh, and delta-based recovery for connection drops.
+**New in v1.2.3:** safer design-system registry loading, plus the v1.2.0 workflow upgrades: device inheritance, robust screenshot URL refresh, and delta-based recovery for connection drops.
 
 **Runtime scope:** requires only `STITCH_API_KEY`, talks only to Google Stitch endpoints needed for generation/screenshot delivery, and stores local artifacts in `runs/`, `state/`, and `latest-screen.json`.
 

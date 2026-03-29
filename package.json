@@ -1,6 +1,6 @@
 {
   "name": "stitch-design",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Official Google Stitch SDK for OpenClaw — text-to-UI generation, guided edits, variants, exports, screen aliases, and lineage tracking.",
   "keywords": [
     "openclaw",
