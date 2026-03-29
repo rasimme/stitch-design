@@ -1,7 +1,7 @@
 {
   "name": "stitch-design",
-  "version": "1.0.3",
-  "description": "AI-powered UI design with Google Stitch — generate, iterate, export. OpenClaw AgentSkill.",
+  "version": "1.2.1",
+  "description": "Official Google Stitch SDK for OpenClaw \u2014 text-to-UI generation, guided edits, variants, exports, screen aliases, and lineage tracking.",
   "keywords": [
     "openclaw",
     "skill",
@@ -10,7 +10,11 @@
     "design",
     "ai",
     "figma",
-    "prototyping"
+    "prototyping",
+    "official-sdk",
+    "workflow",
+    "lineage",
+    "screen-aliases"
   ],
   "repository": {
     "type": "git",

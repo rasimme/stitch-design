@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://github.com/rasimme/stitch-design/blob/master/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
-  <a href="https://github.com/rasimme/stitch-design/blob/master/CHANGELOG.md"><img src="https://img.shields.io/badge/version-v1.2.0-blue.svg" alt="Version"></a>
+  <a href="https://github.com/rasimme/stitch-design/blob/master/CHANGELOG.md"><img src="https://img.shields.io/badge/version-v1.2.1-blue.svg" alt="Version"></a>
   <a href="https://clawhub.com"><img src="https://img.shields.io/badge/ClawHub-skill-purple.svg" alt="ClawHub"></a>
 </p>
 
@@ -32,7 +32,7 @@ Your AI agent generates, iterates, and exports UI designs through Google Stitch 
 >
 > → Agent shapes the prompt → Stitch generates → hi-res screenshot delivered → "make it warmer" → done.
 
-**New in v1.2.0:** Design system injection via `--design-system <name>` from a local `design-systems/` registry, automatic device type inheritance for edit/variants, robust screenshot URL validation with auto-refresh, and delta-based recovery for connection drops.
+**New in v1.2.1:** safer design-system registry loading, plus the v1.2.0 workflow upgrades: device inheritance, robust screenshot URL refresh, and delta-based recovery for connection drops.
 
 ---
 

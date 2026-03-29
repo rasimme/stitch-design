@@ -1,6 +1,6 @@
 ---
 name: stitch-design
-description: AI-powered UI design with Google Stitch — generate screens from text, edit with natural language, explore variants, and track design evolution. Features screen aliases (human-readable names instead of hex IDs), append-only event log with full lineage tracking, hi-res screenshot delivery via Google CDN, and automatic connection-drop recovery. Supports multi-concept workflows (name concepts, compare side by side, trace history). Requires STITCH_API_KEY.
+description: Official Google Stitch SDK for OpenClaw: turn chat into production-style UI exploration. Generate screens from text, apply targeted edits, branch variants, export HTML/images, and track full design lineage with screen aliases and event history. Includes hi-res screenshot delivery, multi-concept workflows, and resilient recovery for long-running Stitch jobs. Requires STITCH_API_KEY.
 metadata: {"openclaw": {"requires": {"anyBins": ["node", "node18", "node20", "node22"], "env": ["STITCH_API_KEY"]}, "primaryEnv": "STITCH_API_KEY", "homepage": "https://github.com/rasimme/stitch-design"}}
 ---
 
