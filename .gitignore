@@ -3,3 +3,4 @@ runs/
 state/
 latest-screen.json
 .env
+CLAUDE.md
